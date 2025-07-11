@@ -12,6 +12,7 @@
   "dependencies": {
     "@safe-global/safe-gateway-typescript-sdk": "^3.23.1",
     "@types/semver": "^7.7.0",
+    "prool": "^0.0.24",
     "semver": "^7.7.2",
     "viem": "^2.31.7"
   }
