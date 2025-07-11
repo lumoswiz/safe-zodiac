@@ -11,14 +11,9 @@ import {
 } from 'viem';
 import { foundry } from 'viem/chains';
 import { account } from './config';
-import {
-  SAFE_PROXY_FACTORY_BYTECODE,
-  SAFE_SINGLETON_BYTECODE,
-  SALT_NONCE,
-} from './constants';
+import { SALT_NONCE } from './constants';
 import { SafeContractSuite } from '../src/lib/safe';
 import { match } from '../src/lib/utils';
-import { SAFE_PROXY_FACTORY, SAFE_SINGLETON } from '../src/lib/constants';
 import { anvil } from 'prool/instances';
 
 describe('SafeContractSuite', () => {
@@ -44,16 +39,6 @@ describe('SafeContractSuite', () => {
         transport: http(),
       })
     );
-
-    await client.setCode({
-      address: SAFE_PROXY_FACTORY,
-      bytecode: SAFE_PROXY_FACTORY_BYTECODE,
-    });
-
-    await client.setCode({
-      address: SAFE_SINGLETON,
-      bytecode: SAFE_SINGLETON_BYTECODE,
-    });
   });
 
   afterAll(async () => {
