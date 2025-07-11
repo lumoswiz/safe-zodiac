@@ -16,7 +16,8 @@ import {
   PROXY_BYTECODE_SUFFIX,
   ROLES_V2_MODULE_MASTERCOPY,
 } from './constants';
-import { MetaTransactionData } from '../types';
+import { BuildTxResult } from '../types';
+import { isContractDeployed } from './utils';
 
 export class ZodiacRolesSuite {
   client: PublicClient;
@@ -56,9 +57,11 @@ export class ZodiacRolesSuite {
   async buildDeployModuleTx(
     safe: Address,
     saltNonce: bigint
-  ): Promise<MetaTransactionData | null> {
+  ): Promise<BuildTxResult> {
     const deployed = await this.isModuleDeployed(safe, saltNonce);
-    if (deployed) return null;
+    if (deployed) {
+      return { status: 'skipped' };
+    }
 
     const to = MODULE_PROXY_FACTORY;
     const data = encodeFunctionData({
@@ -70,13 +73,16 @@ export class ZodiacRolesSuite {
         BigInt(saltNonce),
       ],
     });
-    return { to, value: '0x0', data };
+
+    return {
+      status: 'built',
+      tx: { to, value: '0x0', data },
+    };
   }
 
   async isModuleDeployed(safe: Address, saltNonce: bigint): Promise<boolean> {
     const moduleAddress = this.calculateModuleProxyAddress(safe, saltNonce);
-    const code = await this.client.getCode({ address: moduleAddress });
-    return !!(code && code !== '0x');
+    return isContractDeployed(this.client, moduleAddress);
   }
 
   private getModuleSetUpData(safe: Address): Hex {

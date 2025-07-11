@@ -53,3 +53,7 @@ export interface SafeEIP712Args {
   chainId: number;
   data: SafeTransactionData | EIP712TypedData | Hex;
 }
+
+export type BuildTxResult =
+  | { status: 'skipped' }
+  | { status: 'built'; tx: MetaTransactionData };

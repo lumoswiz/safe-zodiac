@@ -17,6 +17,8 @@ import {
   SAFE_PROXY_FACTORY_ABI,
   SAFE_SINGLETON_ABI,
 } from './abi';
+import { BuildTxResult } from '../types';
+import { isContractDeployed } from './utils';
 
 export class SafeContractSuite {
   client: PublicClient;
@@ -116,5 +118,47 @@ export class SafeContractSuite {
       args: [module],
     });
     return isEnabled;
+  }
+
+  async isSafeDeployed(owners: Address[], saltNonce: bigint): Promise<boolean> {
+    const safeAddress = await this.calculateSafeAddress(owners, saltNonce);
+    return isContractDeployed(this.client, safeAddress);
+  }
+
+  async buildSafeDeploymentTx(
+    owner: Address,
+    saltNonce: bigint
+  ): Promise<BuildTxResult> {
+    const deployed = await this.isSafeDeployed([owner], saltNonce);
+
+    if (deployed) {
+      return { status: 'skipped' };
+    }
+
+    const setup = encodeFunctionData({
+      abi: SAFE_SINGLETON_ABI,
+      functionName: 'setup',
+      args: [
+        [owner],
+        1n,
+        ZERO_ADDRESS,
+        '0x',
+        ZERO_ADDRESS,
+        ZERO_ADDRESS,
+        0n,
+        ZERO_ADDRESS,
+      ],
+    });
+
+    const data = encodeFunctionData({
+      abi: SAFE_PROXY_FACTORY_ABI,
+      functionName: 'createProxyWithNonce',
+      args: [SAFE_SINGLETON, setup, saltNonce],
+    });
+
+    return {
+      status: 'built',
+      tx: { to: SAFE_PROXY_FACTORY, value: '0x0', data },
+    };
   }
 }
