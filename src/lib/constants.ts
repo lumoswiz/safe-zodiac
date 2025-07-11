@@ -1,4 +1,4 @@
-import { type Address } from 'viem';
+import { Hex, type Address } from 'viem';
 
 export const EQ_OR_GT_1_3_0 = '>=1.3.0';
 
@@ -34,3 +34,8 @@ export const SAFE_NETWORKS: { [chainId: number]: string } = {
   8453: 'base',
   11155111: 'sepolia',
 };
+
+export const PROXY_BYTECODE_PREFIX: Hex =
+  '0x602d8060093d393df3363d3d373d3d3d363d73';
+
+export const PROXY_BYTECODE_SUFFIX: Hex = '0x5af43d82803e903d91602b57fd5bf3';
