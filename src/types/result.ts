@@ -14,6 +14,8 @@ export type IsModuleEnabledResult = Result<boolean>;
 export type CalculateSafeAddressResult = Result<Address>;
 export type GetVersionResult = Result<SafeVersion, string>;
 export type IsSafeDeployedResult = Result<boolean>;
+export type CalculateModuleProxyAddressResult = Result<Address>;
+export type IsModuleDeployedResult = Result<boolean>;
 
 export type BuildTxResult =
   | { status: 'skipped' }

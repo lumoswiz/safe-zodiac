@@ -16,7 +16,11 @@ import {
   PROXY_BYTECODE_SUFFIX,
   ROLES_V2_MODULE_MASTERCOPY,
 } from './constants';
-import { BuildTxResult } from '../types';
+import type {
+  BuildTxResult,
+  CalculateModuleProxyAddressResult,
+  IsModuleDeployedResult,
+} from '../types';
 import { isContractDeployed } from './utils';
 
 export class ZodiacRolesSuite {
@@ -26,63 +30,92 @@ export class ZodiacRolesSuite {
     this.client = publicClient;
   }
 
-  calculateModuleProxyAddress(safe: Address, saltNonce: bigint): Address {
-    const initParams = encodeAbiParameters(
-      parseAbiParameters('address _owner, address _avatar, address _target'),
-      [safe, safe, safe]
-    );
-    const moduleSetupData = encodeFunctionData({
-      abi: ROLES_V2_MODULE_ABI,
-      functionName: 'setUp',
-      args: [initParams],
-    });
-    const salt = keccak256(
-      encodePacked(
-        ['bytes32', 'uint256'],
-        [keccak256(moduleSetupData), saltNonce]
-      )
-    );
-    const bytecode = encodePacked(
-      ['bytes', 'address', 'bytes'],
-      [PROXY_BYTECODE_PREFIX, ROLES_V2_MODULE_MASTERCOPY, PROXY_BYTECODE_SUFFIX]
-    );
-    return getContractAddress({
-      from: MODULE_PROXY_FACTORY,
-      opcode: 'CREATE2',
-      salt,
-      bytecode,
-    });
+  calculateModuleProxyAddress(
+    safe: Address,
+    saltNonce: bigint
+  ): CalculateModuleProxyAddressResult {
+    try {
+      const initParams = encodeAbiParameters(
+        parseAbiParameters('address _owner, address _avatar, address _target'),
+        [safe, safe, safe]
+      );
+      const moduleSetupData = encodeFunctionData({
+        abi: ROLES_V2_MODULE_ABI,
+        functionName: 'setUp',
+        args: [initParams],
+      });
+      const salt = keccak256(
+        encodePacked(
+          ['bytes32', 'uint256'],
+          [keccak256(moduleSetupData), saltNonce]
+        )
+      );
+      const bytecode = encodePacked(
+        ['bytes', 'address', 'bytes'],
+        [
+          PROXY_BYTECODE_PREFIX,
+          ROLES_V2_MODULE_MASTERCOPY,
+          PROXY_BYTECODE_SUFFIX,
+        ]
+      );
+      const address = getContractAddress({
+        from: MODULE_PROXY_FACTORY,
+        opcode: 'CREATE2',
+        salt,
+        bytecode,
+      });
+      return { status: 'ok', value: address };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async isModuleDeployed(
+    safe: Address,
+    saltNonce: bigint
+  ): Promise<IsModuleDeployedResult> {
+    try {
+      const addrRes = this.calculateModuleProxyAddress(safe, saltNonce);
+      if (addrRes.status === 'error') {
+        return { status: 'error', error: addrRes.error };
+      }
+      const deployed = await isContractDeployed(this.client, addrRes.value);
+      return { status: 'ok', value: deployed };
+    } catch (error) {
+      return { status: 'error', error };
+    }
   }
 
   async buildDeployModuleTx(
     safe: Address,
     saltNonce: bigint
   ): Promise<BuildTxResult> {
-    const deployed = await this.isModuleDeployed(safe, saltNonce);
-    if (deployed) {
-      return { status: 'skipped' };
+    try {
+      const deployedRes = await this.isModuleDeployed(safe, saltNonce);
+      if (deployedRes.status === 'error') {
+        return { status: 'error', error: deployedRes.error };
+      }
+      if (deployedRes.value) {
+        return { status: 'skipped' };
+      }
+
+      const data = encodeFunctionData({
+        abi: MODULE_PROXY_FACTORY_ABI,
+        functionName: 'deployModule',
+        args: [
+          ROLES_V2_MODULE_MASTERCOPY,
+          this.getModuleSetUpData(safe),
+          BigInt(saltNonce),
+        ],
+      });
+
+      return {
+        status: 'built',
+        tx: { to: MODULE_PROXY_FACTORY, value: '0x0', data },
+      };
+    } catch (error) {
+      return { status: 'error', error };
     }
-
-    const to = MODULE_PROXY_FACTORY;
-    const data = encodeFunctionData({
-      abi: MODULE_PROXY_FACTORY_ABI,
-      functionName: 'deployModule',
-      args: [
-        ROLES_V2_MODULE_MASTERCOPY,
-        this.getModuleSetUpData(safe),
-        BigInt(saltNonce),
-      ],
-    });
-
-    return {
-      status: 'built',
-      tx: { to, value: '0x0', data },
-    };
-  }
-
-  async isModuleDeployed(safe: Address, saltNonce: bigint): Promise<boolean> {
-    const moduleAddress = this.calculateModuleProxyAddress(safe, saltNonce);
-    return isContractDeployed(this.client, moduleAddress);
   }
 
   private getModuleSetUpData(safe: Address): Hex {
