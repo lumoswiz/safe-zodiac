@@ -11,6 +11,14 @@ export interface Deployment {
   address: Address;
 }
 
+export type SafeVersion = '1.4.1' | '1.3.0' | '1.2.0' | '1.1.1' | '1.0.0';
+
+export type MinimalSafeInfo = {
+  address: Address;
+  chainId: number;
+  version: SafeVersion;
+};
+
 export enum OperationType {
   Call = 0,
   DelegateCall = 1,
