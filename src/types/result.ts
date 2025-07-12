@@ -1,5 +1,9 @@
 import type { Address } from 'viem';
-import type { MetaTransactionData, SafeVersion } from './safe';
+import type {
+  MetaTransactionData,
+  SafeTransactionData,
+  SafeVersion,
+} from './safe';
 
 export type Ok<T> = { status: 'ok'; value: T };
 export type Err<E> = { status: 'error'; error: E };
@@ -19,6 +23,9 @@ export type IsModuleDeployedResult = Result<boolean>;
 export type GetOwnersResult = Result<Address[]>;
 export type IsOwnerResult = Result<boolean>;
 export type BuildModuleTxResult = Result<MetaTransactionData>;
+export type BuildSafeTxResult = Result<SafeTransactionData>;
+export type GetSafeTxHashResult = Result<string>;
+export type IsTxReadyResult = Result<boolean>;
 
 export type BuildTxResult =
   | { status: 'skipped' }

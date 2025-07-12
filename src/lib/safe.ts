@@ -3,6 +3,7 @@ import {
   encodeFunctionData,
   encodePacked,
   getContractAddress,
+  hashTypedData,
   keccak256,
   type PublicClient,
 } from 'viem';
@@ -31,8 +32,11 @@ import type {
   GetOwnersResult,
   IsOwnerResult,
   BuildModuleTxResult,
+  GetSafeTxHashResult,
+  SafeTransactionData,
 } from '../types';
 import { isContractDeployed } from './utils';
+import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
   client: PublicClient;
@@ -296,6 +300,49 @@ export class SafeContractSuite {
         args: [prevModule, module],
       });
       return { status: 'ok', value: { to: safe, value: '0x0', data } };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async getSafeTransactionHash(
+    safe: Address,
+    tx: SafeTransactionData,
+    version: SafeVersion,
+    chainId: number
+  ): Promise<GetSafeTxHashResult> {
+    try {
+      const deployed = await isContractDeployed(this.client, safe);
+
+      if (deployed) {
+        const hash = await this.client.readContract({
+          abi: SAFE_PROXY_ABI,
+          address: safe,
+          functionName: 'getTransactionHash',
+          args: [
+            tx.to,
+            BigInt(tx.value),
+            tx.data,
+            tx.operation,
+            tx.safeTxGas,
+            tx.baseGas,
+            tx.gasPrice,
+            tx.gasToken,
+            tx.refundReceiver,
+            tx.nonce,
+          ],
+        });
+        return { status: 'ok', value: hash as string };
+      } else {
+        const typedData = generateSafeTypedData({
+          safeAddress: safe,
+          safeVersion: version,
+          chainId,
+          data: tx,
+        });
+        const hash = hashTypedData(typedData);
+        return { status: 'ok', value: hash };
+      }
     } catch (error) {
       return { status: 'error', error };
     }
