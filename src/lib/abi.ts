@@ -1172,4 +1172,32 @@ export const SAFE_PROXY_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [
+      {
+        internalType: 'bytes32',
+        name: 'dataHash',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'bytes',
+        name: 'data',
+        type: 'bytes',
+      },
+      {
+        internalType: 'bytes',
+        name: 'signatures',
+        type: 'bytes',
+      },
+      {
+        internalType: 'uint256',
+        name: 'requiredSignatures',
+        type: 'uint256',
+      },
+    ],
+    name: 'checkNSignatures',
+    outputs: [],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;

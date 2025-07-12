@@ -4,6 +4,7 @@ import {
   encodePacked,
   getContractAddress,
   hashTypedData,
+  Hex,
   keccak256,
   type PublicClient,
 } from 'viem';
@@ -34,6 +35,7 @@ import type {
   BuildModuleTxResult,
   GetSafeTxHashResult,
   SafeTransactionData,
+  IsTxReadyResult,
 } from '../types';
 import { isContractDeployed } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
@@ -345,6 +347,34 @@ export class SafeContractSuite {
       }
     } catch (error) {
       return { status: 'error', error };
+    }
+  }
+
+  async isTransactionReady(
+    safe: Address,
+    hash: Hex,
+    txData: Hex,
+    signatures: Hex[],
+    threshold: bigint
+  ): Promise<IsTxReadyResult> {
+    try {
+      const sigBlob = encodePacked(
+        signatures.map(() => 'bytes'),
+        signatures
+      );
+
+      await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'checkNSignatures',
+        args: [hash, txData, sigBlob, threshold],
+      });
+      return { status: 'ok', value: true };
+    } catch (e: any) {
+      if (e?.message?.includes('revert')) {
+        return { status: 'ok', value: false };
+      }
+      return { status: 'error', error: e };
     }
   }
 }
