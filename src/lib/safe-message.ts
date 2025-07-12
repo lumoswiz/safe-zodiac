@@ -1,18 +1,8 @@
-import { SafeInfo } from '@safe-global/safe-gateway-typescript-sdk';
 import { satisfies } from 'semver';
-import {
-  hashMessage,
-  hashTypedData,
-  isHex,
-  fromHex,
-  type Address,
-  Hash,
-} from 'viem';
-import type { EIP712TypedData } from '../types';
+import { hashMessage, hashTypedData, isHex, fromHex, Hash } from 'viem';
+import type { EIP712TypedData, MinimalSafeInfo } from '../types';
 
 const EQ_OR_GT_1_3_0 = '>=1.3.0';
-
-export type MinimalSafeInfo = Pick<SafeInfo, 'address' | 'version' | 'chainId'>;
 
 export type DecodedSafeMessage = {
   decodedMessage: string | EIP712TypedData;
@@ -36,13 +26,12 @@ const generateSafeMessageTypedData = (
     throw Error('Cannot create SafeMessage without version information');
   }
 
-  const verifyingContract = address.value as Address;
   const domain = satisfies(version, EQ_OR_GT_1_3_0)
     ? {
         chainId: Number(BigInt(chainId)),
-        verifyingContract,
+        address,
       }
-    : { verifyingContract };
+    : { address };
 
   return {
     domain,
