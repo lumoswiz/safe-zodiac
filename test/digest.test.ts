@@ -11,7 +11,7 @@ import {
 import {
   calculateSafeEIP712Hash,
   generateSafeTypedData,
-} from '../src/lib/safe-transaction';
+} from '../src/lib/safe-eip712';
 import type { SafeTransactionData } from '../src/types';
 import { OperationType } from '../src/types';
 

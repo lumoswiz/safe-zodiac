@@ -1,6 +1,5 @@
 import { describe, it, expect, afterAll, beforeAll } from 'bun:test';
 import {
-  Address,
   createPublicClient,
   createTestClient,
   Hex,
@@ -14,6 +13,7 @@ import { account } from './config';
 import { SALT_NONCE } from './constants';
 import { SafeContractSuite } from '../src/lib/safe';
 import { match } from '../src/lib/utils';
+import { unwrap } from './test-utils';
 import { anvil } from 'prool/instances';
 
 describe('SafeContractSuite', () => {
@@ -24,7 +24,7 @@ describe('SafeContractSuite', () => {
   beforeAll(async () => {
     const forkUrl = process.env.RPC_URL;
     if (!forkUrl) throw new Error('Missing RPC_URL in env!');
-    anvilInstance = anvil({ port: 8545, forkUrl: forkUrl });
+    anvilInstance = anvil({ port: 8545, forkUrl });
     await anvilInstance.start();
 
     client = createTestClient({
@@ -46,8 +46,11 @@ describe('SafeContractSuite', () => {
   });
 
   it('returns false if Safe not deployed', async () => {
-    const deployed = await suite.isSafeDeployed([account.address], SALT_NONCE);
-    expect(deployed).toBe(false);
+    const deployedRes = await suite.isSafeDeployed(
+      [account.address],
+      SALT_NONCE
+    );
+    expect(unwrap(deployedRes)).toBe(false);
   });
 
   it('buildSafeDeploymentTx: returns "built" when Safe not deployed', async () => {
@@ -88,12 +91,11 @@ describe('SafeContractSuite', () => {
 
         await client.extend(publicActions).waitForTransactionReceipt({ hash });
 
-        const isDeployed = await suite.isSafeDeployed(
+        const isDeployedRes = await suite.isSafeDeployed(
           [account.address],
           SALT_NONCE
         );
-
-        expect(isDeployed).toBe(true);
+        expect(unwrap(isDeployedRes)).toBe(true);
       },
       skipped: () => {
         throw new Error('Safe already deployed; expected "built" tx');
@@ -102,14 +104,15 @@ describe('SafeContractSuite', () => {
   });
 
   it('skips building tx if Safe bytecode is already present', async () => {
-    const safe: Address = await suite.calculateSafeAddress(
+    const addrRes = await suite.calculateSafeAddress(
       [account.address],
       SALT_NONCE
     );
-    const dummyBytecode = '0x3d604052';
+    const safeAddr = unwrap(addrRes);
 
+    const dummyBytecode = '0x3d604052';
     await client.setCode({
-      address: safe,
+      address: safeAddr,
       bytecode: dummyBytecode,
     });
 

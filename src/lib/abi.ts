@@ -1071,4 +1071,133 @@ export const SAFE_PROXY_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'owner',
+        type: 'address',
+      },
+    ],
+    name: 'isOwner',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'prevModule',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'module',
+        type: 'address',
+      },
+    ],
+    name: 'disableModule',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'to',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'value',
+        type: 'uint256',
+      },
+      {
+        internalType: 'bytes',
+        name: 'data',
+        type: 'bytes',
+      },
+      {
+        internalType: 'enum Enum.Operation',
+        name: 'operation',
+        type: 'uint8',
+      },
+      {
+        internalType: 'uint256',
+        name: 'safeTxGas',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'baseGas',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'gasPrice',
+        type: 'uint256',
+      },
+      {
+        internalType: 'address',
+        name: 'gasToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'refundReceiver',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: '_nonce',
+        type: 'uint256',
+      },
+    ],
+    name: 'getTransactionHash',
+    outputs: [
+      {
+        internalType: 'bytes32',
+        name: '',
+        type: 'bytes32',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'bytes32',
+        name: 'dataHash',
+        type: 'bytes32',
+      },
+      {
+        internalType: 'bytes',
+        name: 'data',
+        type: 'bytes',
+      },
+      {
+        internalType: 'bytes',
+        name: 'signatures',
+        type: 'bytes',
+      },
+      {
+        internalType: 'uint256',
+        name: 'requiredSignatures',
+        type: 'uint256',
+      },
+    ],
+    name: 'checkNSignatures',
+    outputs: [],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;

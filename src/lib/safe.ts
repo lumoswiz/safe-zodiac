@@ -3,6 +3,8 @@ import {
   encodeFunctionData,
   encodePacked,
   getContractAddress,
+  hashTypedData,
+  Hex,
   keccak256,
   type PublicClient,
 } from 'viem';
@@ -28,8 +30,15 @@ import type {
   BuildTxResult,
   GetVersionResult,
   SafeVersion,
+  GetOwnersResult,
+  IsOwnerResult,
+  BuildModuleTxResult,
+  GetSafeTxHashResult,
+  SafeTransactionData,
+  IsTxReadyResult,
 } from '../types';
 import { isContractDeployed } from './utils';
+import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
   client: PublicClient;
@@ -235,6 +244,137 @@ export class SafeContractSuite {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       return { status: 'error', error: msg };
+    }
+  }
+
+  async getOwners(safe: Address): Promise<GetOwnersResult> {
+    try {
+      const owners = await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'getOwners',
+      });
+      return { status: 'ok', value: owners as Address[] };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async isOwner(safe: Address, owner: Address): Promise<IsOwnerResult> {
+    try {
+      const isOwner = await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'isOwner',
+        args: [owner],
+      });
+      return { status: 'ok', value: isOwner as boolean };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async buildEnableModuleTx(
+    safe: Address,
+    module: Address
+  ): Promise<BuildModuleTxResult> {
+    try {
+      const data = encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'enableModule',
+        args: [module],
+      });
+      return { status: 'ok', value: { to: safe, value: '0x0', data } };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async buildDisableModuleTx(
+    safe: Address,
+    prevModule: Address,
+    module: Address
+  ): Promise<BuildModuleTxResult> {
+    try {
+      const data = encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'disableModule',
+        args: [prevModule, module],
+      });
+      return { status: 'ok', value: { to: safe, value: '0x0', data } };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async getSafeTransactionHash(
+    safe: Address,
+    tx: SafeTransactionData,
+    version: SafeVersion,
+    chainId: number
+  ): Promise<GetSafeTxHashResult> {
+    try {
+      const deployed = await isContractDeployed(this.client, safe);
+
+      if (deployed) {
+        const hash = await this.client.readContract({
+          abi: SAFE_PROXY_ABI,
+          address: safe,
+          functionName: 'getTransactionHash',
+          args: [
+            tx.to,
+            BigInt(tx.value),
+            tx.data,
+            tx.operation,
+            tx.safeTxGas,
+            tx.baseGas,
+            tx.gasPrice,
+            tx.gasToken,
+            tx.refundReceiver,
+            tx.nonce,
+          ],
+        });
+        return { status: 'ok', value: hash as string };
+      } else {
+        const typedData = generateSafeTypedData({
+          safeAddress: safe,
+          safeVersion: version,
+          chainId,
+          data: tx,
+        });
+        const hash = hashTypedData(typedData);
+        return { status: 'ok', value: hash };
+      }
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async isTransactionReady(
+    safe: Address,
+    hash: Hex,
+    txData: Hex,
+    signatures: Hex[],
+    threshold: bigint
+  ): Promise<IsTxReadyResult> {
+    try {
+      const sigBlob = encodePacked(
+        signatures.map(() => 'bytes'),
+        signatures
+      );
+
+      await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'checkNSignatures',
+        args: [hash, txData, sigBlob, threshold],
+      });
+      return { status: 'ok', value: true };
+    } catch (e: any) {
+      if (e?.message?.includes('revert')) {
+        return { status: 'ok', value: false };
+      }
+      return { status: 'error', error: e };
     }
   }
 }
