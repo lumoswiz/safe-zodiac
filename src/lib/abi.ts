@@ -1090,4 +1090,22 @@ export const SAFE_PROXY_ABI = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'prevModule',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'module',
+        type: 'address',
+      },
+    ],
+    name: 'disableModule',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;

@@ -30,6 +30,7 @@ import type {
   SafeVersion,
   GetOwnersResult,
   IsOwnerResult,
+  BuildModuleTxResult,
 } from '../types';
 import { isContractDeployed } from './utils';
 
@@ -262,6 +263,39 @@ export class SafeContractSuite {
         args: [owner],
       });
       return { status: 'ok', value: isOwner as boolean };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async buildEnableModuleTx(
+    safe: Address,
+    module: Address
+  ): Promise<BuildModuleTxResult> {
+    try {
+      const data = encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'enableModule',
+        args: [module],
+      });
+      return { status: 'ok', value: { to: safe, value: '0x0', data } };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async buildDisableModuleTx(
+    safe: Address,
+    prevModule: Address,
+    module: Address
+  ): Promise<BuildModuleTxResult> {
+    try {
+      const data = encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'disableModule',
+        args: [prevModule, module],
+      });
+      return { status: 'ok', value: { to: safe, value: '0x0', data } };
     } catch (error) {
       return { status: 'error', error };
     }
