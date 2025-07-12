@@ -28,6 +28,8 @@ import type {
   BuildTxResult,
   GetVersionResult,
   SafeVersion,
+  GetOwnersResult,
+  IsOwnerResult,
 } from '../types';
 import { isContractDeployed } from './utils';
 
@@ -235,6 +237,33 @@ export class SafeContractSuite {
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       return { status: 'error', error: msg };
+    }
+  }
+
+  async getOwners(safe: Address): Promise<GetOwnersResult> {
+    try {
+      const owners = await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'getOwners',
+      });
+      return { status: 'ok', value: owners as Address[] };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async isOwner(safe: Address, owner: Address): Promise<IsOwnerResult> {
+    try {
+      const isOwner = await this.client.readContract({
+        abi: SAFE_PROXY_ABI,
+        address: safe,
+        functionName: 'isOwner',
+        args: [owner],
+      });
+      return { status: 'ok', value: isOwner as boolean };
+    } catch (error) {
+      return { status: 'error', error };
     }
   }
 }
