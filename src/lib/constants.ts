@@ -2,6 +2,14 @@ import { Hex, type Address } from 'viem';
 
 export const EQ_OR_GT_1_3_0 = '>=1.3.0';
 
+export const SAFE_VERSIONS = [
+  '1.4.1',
+  '1.3.0',
+  '1.2.0',
+  '1.1.1',
+  '1.0.0',
+] as const;
+
 export const ZERO_ADDRESS: Address =
   '0x0000000000000000000000000000000000000000';
 

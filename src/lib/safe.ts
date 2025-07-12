@@ -10,6 +10,7 @@ import {
   SAFE_NETWORKS,
   SAFE_PROXY_FACTORY,
   SAFE_SINGLETON,
+  SAFE_VERSIONS,
   ZERO_ADDRESS,
 } from './constants';
 import {
@@ -17,7 +18,7 @@ import {
   SAFE_PROXY_FACTORY_ABI,
   SAFE_SINGLETON_ABI,
 } from './abi';
-import { BuildTxResult } from '../types';
+import type { BuildTxResult, GetVersionResult, SafeVersion } from '../types';
 import { isContractDeployed } from './utils';
 
 export class SafeContractSuite {
@@ -160,5 +161,19 @@ export class SafeContractSuite {
       status: 'built',
       tx: { to: SAFE_PROXY_FACTORY, value: '0x0', data },
     };
+  }
+
+  async getVersion(safe: Address): Promise<GetVersionResult> {
+    const version = await this.client.readContract({
+      address: safe,
+      abi: SAFE_PROXY_ABI,
+      functionName: 'VERSION',
+    });
+
+    if (SAFE_VERSIONS.includes(version as SafeVersion)) {
+      return { status: 'ok', version: version as SafeVersion };
+    }
+
+    return { status: 'unknown_version', version };
   }
 }
