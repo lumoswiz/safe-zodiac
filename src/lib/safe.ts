@@ -399,7 +399,7 @@ export class SafeContractSuite {
         status: 'ok',
         value: {
           to: safe,
-          value: '0x0',
+          value: '0x00',
           data,
         },
       };
