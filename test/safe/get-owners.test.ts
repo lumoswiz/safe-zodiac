@@ -1,7 +1,7 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
-import { account, DEPLOYED_SALT_NONCE } from '../src/constants';
+import { account, DEPLOYED_SALT_NONCE, SALT_NONCE } from '../src/constants';
 import { unwrap } from '../utils';
 import { match } from '../../src/lib/utils';
 import {
@@ -17,29 +17,32 @@ import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
 
 let DEPLOYED_SAFE_ADDRESS: Address;
+let UNDEPLOYED_SAFE_ADDRESS: Address;
 let testClient: TestClient;
 let publicClient: PublicClient;
 let suite: SafeContractSuite;
 
 describe('Owner Helpers', () => {
   beforeEach(async () => {
-    const RPC_URL = testConfig.rpcUrl;
-
     publicClient = createPublicClient({
       chain: foundry,
-      transport: http(RPC_URL),
+      transport: http(testConfig.rpcUrl),
     });
 
     testClient = createTestClient({
       chain: foundry,
       mode: 'anvil',
-      transport: http(RPC_URL),
+      transport: http(testConfig.rpcUrl),
     });
 
     suite = new SafeContractSuite(publicClient);
 
     DEPLOYED_SAFE_ADDRESS = unwrap(
       await suite.calculateSafeAddress([account.address], DEPLOYED_SALT_NONCE)
+    );
+
+    UNDEPLOYED_SAFE_ADDRESS = unwrap(
+      await suite.calculateSafeAddress([account.address], SALT_NONCE)
     );
 
     const deploymentResult = await suite.buildSafeDeploymentTx(
@@ -80,5 +83,35 @@ describe('Owner Helpers', () => {
     expect(unwrap(await suite.isOwner(DEPLOYED_SAFE_ADDRESS, notOwner))).toBe(
       false
     );
+  });
+
+  test('isSafeDeployed is false before deployment', async () => {
+    const deployedRes = await suite.isSafeDeployed(
+      [account.address],
+      SALT_NONCE
+    );
+    await match(deployedRes, {
+      ok: ({ value }) => expect(value).toBe(false),
+      error: ({ error }) => {
+        throw new Error(error instanceof Error ? error.message : String(error));
+      },
+    });
+  });
+
+  test('getOwners errors if safe not deployed', async () => {
+    const ownersRes = await suite.getOwners(UNDEPLOYED_SAFE_ADDRESS);
+    await match(ownersRes, {
+      ok: () => {
+        throw new Error(
+          'Expected getOwners to error for non‑deployed Safe, but it succeeded'
+        );
+      },
+      error: ({ error }) => {
+        // match "returned no data" or the previous patterns
+        expect(String(error)).toMatch(
+          /returned no data|no code|call exception/i
+        );
+      },
+    });
   });
 });
