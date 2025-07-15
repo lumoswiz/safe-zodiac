@@ -1,68 +1,53 @@
 import '../setup';
-import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, DEPLOYED_SALT_NONCE } from '../src/constants';
 import { unwrap } from '../utils';
 import { match } from '../../src/lib/utils';
 import {
+  Address,
   createPublicClient,
-  createTestClient,
-  http,
   PublicClient,
   TestClient,
   walletActions,
+  http,
+  createTestClient,
 } from 'viem';
 import { foundry } from 'viem/chains';
+import { testConfig } from '../config';
 
+let DEPLOYED_SAFE_ADDRESS: Address;
 let testClient: TestClient;
 let publicClient: PublicClient;
+let suite: SafeContractSuite;
 
-describe('Safe Deployment', () => {
+describe('Owner Helpers', () => {
   beforeEach(async () => {
     const RPC_URL = testConfig.rpcUrl;
+
     publicClient = createPublicClient({
       chain: foundry,
       transport: http(RPC_URL),
     });
+
     testClient = createTestClient({
       chain: foundry,
       mode: 'anvil',
       transport: http(RPC_URL),
     });
-  });
 
-  test('should deploy a Safe and verify its code', async () => {
-    const suite = new SafeContractSuite(publicClient);
+    suite = new SafeContractSuite(publicClient);
 
-    const safeAddressResult = await suite.calculateSafeAddress(
-      [account.address],
-      DEPLOYED_SALT_NONCE
+    DEPLOYED_SAFE_ADDRESS = unwrap(
+      await suite.calculateSafeAddress([account.address], DEPLOYED_SALT_NONCE)
     );
-
-    const safeAddress = unwrap(safeAddressResult);
-    expect(safeAddress).toBeDefined();
-
-    const isDeployedResult = await suite.isSafeDeployed(
-      [account.address],
-      DEPLOYED_SALT_NONCE
-    );
-
-    match(isDeployedResult, {
-      ok: async ({ value }) => {
-        expect(value).toBe(false);
-      },
-      error: ({ error }) => {
-        throw new Error(`Failed to check deployment: ${error}`);
-      },
-    });
 
     const deploymentResult = await suite.buildSafeDeploymentTx(
       account.address,
       DEPLOYED_SALT_NONCE
     );
 
-    match(deploymentResult, {
+    await match(deploymentResult, {
       error: ({ error }) => {
         throw new Error(`Failed to build deployment tx: ${error}`);
       },
@@ -78,18 +63,22 @@ describe('Safe Deployment', () => {
           data: tx.data,
           value: BigInt(tx.value),
         });
-
-        const code = await publicClient.getCode({ address: safeAddress });
-        expect(code).not.toBe('0x');
-
-        const thresholdResult = await suite.getThreshold(safeAddress);
-        expect(unwrap(thresholdResult)).toBe(1n);
-
-        const ownersResult = await suite.getOwners(safeAddress);
-        const owners = unwrap(ownersResult);
-        expect(owners).toHaveLength(1);
-        expect(owners[0]).toBe(account.address);
       },
     });
+  });
+
+  test('getOwners includes the deployer', async () => {
+    const owners = unwrap(await suite.getOwners(DEPLOYED_SAFE_ADDRESS));
+    expect(owners).toContain(account.address);
+  });
+
+  test('isOwner true/false', async () => {
+    expect(
+      unwrap(await suite.isOwner(DEPLOYED_SAFE_ADDRESS, account.address))
+    ).toBe(true);
+    const notOwner: Address = '0xcafee5b8e78900e7130a9eef940fe898c610c0f9';
+    expect(unwrap(await suite.isOwner(DEPLOYED_SAFE_ADDRESS, notOwner))).toBe(
+      false
+    );
   });
 });

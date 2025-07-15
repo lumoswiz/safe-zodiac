@@ -1,9 +1,17 @@
+import { createServer } from 'prool';
 import { anvil } from 'prool/instances';
-import { foundry } from 'viem/chains';
+import { CHAIN_ID, FORK_URL, FORK, PORT } from '../config';
 
-export const RPC_URL = process.env.RPC_URL!;
-
-export const anvilInstance = anvil({
-  chainId: foundry.id,
-  forkUrl: RPC_URL,
+export const server = createServer({
+  instance: anvil({
+    chainId: CHAIN_ID,
+    forkUrl: FORK_URL,
+  }),
+  port: PORT,
+  limit: FORK,
 });
+
+export function getRpcUrl(): string {
+  const { port } = server.address()!;
+  return `http://localhost:${port}/${FORK}`;
+}

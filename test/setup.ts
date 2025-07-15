@@ -1,16 +1,21 @@
-import { createPublicClient, createTestClient, http } from 'viem';
-import { RPC_URL } from './src/anvil';
-import { foundry } from 'viem/chains';
+import { beforeAll, beforeEach, afterAll } from 'bun:test';
+import { server, getRpcUrl } from './src/anvil';
+import { testConfig } from './config';
 
-const transport = http();
-
-export const testClient = createTestClient({
-  chain: foundry,
-  mode: 'anvil',
-  transport,
+beforeAll(async () => {
+  await server.start();
+  testConfig.rpcUrl = getRpcUrl();
 });
 
-export const publicClient = createPublicClient({
-  chain: foundry,
-  transport,
+beforeEach(async () => {
+  await fetch(`${getRpcUrl()}/restart`, {
+    headers: { Connection: 'close' },
+  });
+});
+
+afterAll(async () => {
+  await fetch(`${getRpcUrl()}/stop`, {
+    headers: { Connection: 'close' },
+  });
+  await server.stop();
 });
