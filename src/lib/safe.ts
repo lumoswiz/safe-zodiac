@@ -1,5 +1,7 @@
 import {
   Address,
+  ContractFunctionExecutionError,
+  ContractFunctionRevertedError,
   encodeFunctionData,
   encodePacked,
   getContractAddress,
@@ -366,7 +368,10 @@ export class SafeContractSuite {
       });
       return { status: 'ok', value: true };
     } catch (e: any) {
-      if (e?.message?.includes('revert')) {
+      if (
+        e instanceof ContractFunctionRevertedError ||
+        e instanceof ContractFunctionExecutionError
+      ) {
         return { status: 'ok', value: false };
       }
       return { status: 'error', error: e };
