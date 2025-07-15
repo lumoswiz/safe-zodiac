@@ -9,12 +9,12 @@ export function unwrap<T>(res: Result<T>): T {
   throw new Error(`Expected ok, got ${res.status}: ${res.error}`);
 }
 
-export async function signAndExec(
+export async function sign(
   suite: SafeContractSuite,
   safeAddress: Address,
   txData: SafeTransactionData,
   account: Account
-) {
+): Promise<Hex> {
   const version = unwrap(await suite.getVersion(safeAddress));
   const chainId = await suite.client.getChainId();
   const typedData = generateSafeTypedData({
@@ -32,6 +32,16 @@ export async function signAndExec(
       primaryType: typedData.primaryType,
       message: typedData.message,
     });
+  return signature;
+}
+
+export async function signAndExec(
+  suite: SafeContractSuite,
+  safeAddress: Address,
+  txData: SafeTransactionData,
+  account: Account
+) {
+  const signature: Hex = await sign(suite, safeAddress, txData, account);
 
   await match(
     await suite.buildExecTransaction(safeAddress, txData, signature),
