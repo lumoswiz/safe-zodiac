@@ -1,6 +1,7 @@
 import { satisfies } from 'semver';
 import {
   hashTypedData,
+  Hex,
   type TypedDataDomain,
   type TypedDataParameter,
 } from 'viem';
@@ -86,6 +87,6 @@ export function generateSafeTypedData(args: SafeEIP712Args): EIP712TypedData {
   };
 }
 
-export function calculateSafeEIP712Hash(args: SafeEIP712Args): string {
+export function calculateSafeEIP712Hash(args: SafeEIP712Args): Hex {
   return hashTypedData(generateSafeTypedData(args));
 }

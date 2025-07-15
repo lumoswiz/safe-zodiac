@@ -20,24 +20,27 @@ import {
   SAFE_PROXY_FACTORY_ABI,
   SAFE_SINGLETON_ABI,
 } from './abi';
-import type {
-  GetNonceResult,
-  GetThresholdResult,
-  GetModulesResult,
-  IsModuleEnabledResult,
-  CalculateSafeAddressResult,
-  IsSafeDeployedResult,
-  BuildTxResult,
-  GetVersionResult,
-  SafeVersion,
-  GetOwnersResult,
-  IsOwnerResult,
-  BuildModuleTxResult,
-  GetSafeTxHashResult,
-  SafeTransactionData,
-  IsTxReadyResult,
+import {
+  type GetNonceResult,
+  type GetThresholdResult,
+  type GetModulesResult,
+  type IsModuleEnabledResult,
+  type CalculateSafeAddressResult,
+  type IsSafeDeployedResult,
+  type BuildTxResult,
+  type GetVersionResult,
+  type SafeVersion,
+  type GetOwnersResult,
+  type IsOwnerResult,
+  type BuildMetaTxResult,
+  type GetSafeTxHashResult,
+  type SafeTransactionData,
+  type IsTxReadyResult,
+  OperationType,
+  SafeTransactionDataResult,
+  BuildEnableModuleTxResult,
 } from '../types';
-import { isContractDeployed } from './utils';
+import { isContractDeployed, match } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
@@ -277,24 +280,51 @@ export class SafeContractSuite {
   async buildEnableModuleTx(
     safe: Address,
     module: Address
-  ): Promise<BuildModuleTxResult> {
-    try {
-      const data = encodeFunctionData({
-        abi: SAFE_PROXY_ABI,
-        functionName: 'enableModule',
-        args: [module],
-      });
-      return { status: 'ok', value: { to: safe, value: '0x0', data } };
-    } catch (error) {
-      return { status: 'error', error };
-    }
+  ): Promise<BuildEnableModuleTxResult> {
+    return match<SafeTransactionDataResult, BuildEnableModuleTxResult>(
+      await this.buildSafeTransactionData(
+        safe,
+        safe,
+        encodeFunctionData({
+          abi: SAFE_PROXY_ABI,
+          functionName: 'enableModule',
+          args: [module],
+        })
+      ),
+      {
+        ok: async ({ value: txData }) => {
+          return match(await this.getVersion(safe), {
+            ok: async ({ value: version }) => {
+              const chainId = await this.client.getChainId();
+              return match<GetSafeTxHashResult, BuildEnableModuleTxResult>(
+                await this.getSafeTransactionHash(
+                  safe,
+                  txData,
+                  version,
+                  chainId
+                ),
+                {
+                  ok: ({ value: safeTxHash }) => ({
+                    status: 'ok',
+                    value: { txData, safeTxHash },
+                  }),
+                  error: ({ error }) => ({ status: 'error', error }),
+                }
+              );
+            },
+            error: ({ error }) => ({ status: 'error', error }),
+          });
+        },
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
   }
 
   async buildDisableModuleTx(
     safe: Address,
     prevModule: Address,
     module: Address
-  ): Promise<BuildModuleTxResult> {
+  ): Promise<BuildMetaTxResult> {
     try {
       const data = encodeFunctionData({
         abi: SAFE_PROXY_ABI,
@@ -334,7 +364,7 @@ export class SafeContractSuite {
             tx.nonce,
           ],
         });
-        return { status: 'ok', value: hash as string };
+        return { status: 'ok', value: hash };
       } else {
         const typedData = generateSafeTypedData({
           safeAddress: safe,
@@ -376,5 +406,69 @@ export class SafeContractSuite {
       }
       return { status: 'error', error: e };
     }
+  }
+
+  async buildExecTransaction(
+    safe: Address,
+    tx: SafeTransactionData,
+    signatures: Hex
+  ): Promise<BuildMetaTxResult> {
+    try {
+      const data = encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'execTransaction',
+        args: [
+          tx.to,
+          BigInt(tx.value),
+          tx.data,
+          tx.operation,
+          tx.safeTxGas,
+          tx.baseGas,
+          tx.gasPrice,
+          tx.gasToken,
+          tx.refundReceiver,
+          signatures,
+        ],
+      });
+      return {
+        status: 'ok',
+        value: {
+          to: safe,
+          value: '0x0',
+          data,
+        },
+      };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  private async buildSafeTransactionData(
+    safe: Address,
+    to: Address,
+    data: Hex,
+    operation: OperationType = OperationType.Call
+  ): Promise<SafeTransactionDataResult> {
+    return match<GetNonceResult, SafeTransactionDataResult>(
+      await this.getNonce(safe),
+      {
+        ok: ({ value: nonce }) => ({
+          status: 'ok',
+          value: {
+            to,
+            value: '0x0',
+            data,
+            operation,
+            safeTxGas: 0n,
+            baseGas: 0n,
+            gasPrice: 0n,
+            gasToken: ZERO_ADDRESS,
+            refundReceiver: ZERO_ADDRESS,
+            nonce,
+          },
+        }),
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
   }
 }

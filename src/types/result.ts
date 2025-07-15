@@ -1,4 +1,4 @@
-import type { Address } from 'viem';
+import type { Address, Hex } from 'viem';
 import type {
   MetaTransactionData,
   SafeTransactionData,
@@ -22,10 +22,14 @@ export type CalculateModuleProxyAddressResult = Result<Address>;
 export type IsModuleDeployedResult = Result<boolean>;
 export type GetOwnersResult = Result<Address[]>;
 export type IsOwnerResult = Result<boolean>;
-export type BuildModuleTxResult = Result<MetaTransactionData>;
-export type BuildSafeTxResult = Result<SafeTransactionData>;
-export type GetSafeTxHashResult = Result<string>;
+export type BuildMetaTxResult = Result<MetaTransactionData>;
+export type GetSafeTxHashResult = Result<Hex>;
 export type IsTxReadyResult = Result<boolean>;
+export type SafeTransactionDataResult = Result<SafeTransactionData>;
+export type BuildEnableModuleTxResult = Result<{
+  txData: SafeTransactionData;
+  safeTxHash: Hex;
+}>;
 
 export type BuildTxResult =
   | { status: 'skipped' }
