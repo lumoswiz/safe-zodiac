@@ -1,4 +1,4 @@
-import { Hex } from 'viem';
+import { Address, Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 export const account = privateKeyToAccount(process.env.PRIVATE_KEY as Hex);
@@ -9,4 +9,8 @@ export const SALT_NONCE: bigint =
 export const DEPLOYED_SALT_NONCE: bigint =
   90930321156822575619585299798051942649965792527247609848192735196178265489997n;
 
-export const DUMMY_MODULE = '0xca3A314ff4A5D12Fb1E64be75D3cEEb782886091';
+export const DUMMY_MODULE: Address =
+  '0xca3A314ff4A5D12Fb1E64be75D3cEEb782886091';
+
+export const SENTINEL_ADDRESS: Address =
+  '0x0000000000000000000000000000000000000001';

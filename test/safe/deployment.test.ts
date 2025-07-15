@@ -5,28 +5,15 @@ import { SafeContractSuite } from '../../src/lib/safe';
 import { account, DEPLOYED_SALT_NONCE } from '../src/constants';
 import { unwrap } from '../utils';
 import { match } from '../../src/lib/utils';
-import {
-  createPublicClient,
-  createTestClient,
-  http,
-  PublicClient,
-  TestClient,
-  walletActions,
-} from 'viem';
+import { createPublicClient, http, PublicClient, walletActions } from 'viem';
 import { foundry } from 'viem/chains';
 
 describe('Safe Deployment', () => {
-  let testClient: TestClient;
   let publicClient: PublicClient;
 
   beforeEach(async () => {
     publicClient = createPublicClient({
       chain: foundry,
-      transport: http(testConfig.rpcUrl),
-    });
-    testClient = createTestClient({
-      chain: foundry,
-      mode: 'anvil',
       transport: http(testConfig.rpcUrl),
     });
   });
@@ -70,7 +57,7 @@ describe('Safe Deployment', () => {
         return;
       },
       built: async ({ tx }) => {
-        await testClient.extend(walletActions).sendTransaction({
+        await publicClient.extend(walletActions).sendTransaction({
           account,
           chain: null,
           to: tx.to,

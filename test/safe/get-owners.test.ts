@@ -8,10 +8,8 @@ import {
   Address,
   createPublicClient,
   PublicClient,
-  TestClient,
   walletActions,
   http,
-  createTestClient,
 } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
@@ -19,19 +17,12 @@ import { testConfig } from '../config';
 describe('Owner Helpers', () => {
   let DEPLOYED_SAFE_ADDRESS: Address;
   let UNDEPLOYED_SAFE_ADDRESS: Address;
-  let testClient: TestClient;
   let publicClient: PublicClient;
   let suite: SafeContractSuite;
 
   beforeEach(async () => {
     publicClient = createPublicClient({
       chain: foundry,
-      transport: http(testConfig.rpcUrl),
-    });
-
-    testClient = createTestClient({
-      chain: foundry,
-      mode: 'anvil',
       transport: http(testConfig.rpcUrl),
     });
 
@@ -59,7 +50,7 @@ describe('Owner Helpers', () => {
         return;
       },
       built: async ({ tx }) => {
-        await testClient.extend(walletActions).sendTransaction({
+        await publicClient.extend(walletActions).sendTransaction({
           account,
           chain: null,
           to: tx.to,
@@ -107,7 +98,6 @@ describe('Owner Helpers', () => {
         );
       },
       error: ({ error }) => {
-        // match "returned no data" or the previous patterns
         expect(String(error)).toMatch(
           /returned no data|no code|call exception/i
         );
