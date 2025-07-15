@@ -20,15 +20,14 @@ let publicClient: PublicClient;
 
 describe('Safe Deployment', () => {
   beforeEach(async () => {
-    const RPC_URL = testConfig.rpcUrl;
     publicClient = createPublicClient({
       chain: foundry,
-      transport: http(RPC_URL),
+      transport: http(testConfig.rpcUrl),
     });
     testClient = createTestClient({
       chain: foundry,
       mode: 'anvil',
-      transport: http(RPC_URL),
+      transport: http(testConfig.rpcUrl),
     });
   });
 
@@ -48,7 +47,7 @@ describe('Safe Deployment', () => {
       DEPLOYED_SALT_NONCE
     );
 
-    match(isDeployedResult, {
+    await match(isDeployedResult, {
       ok: async ({ value }) => {
         expect(value).toBe(false);
       },
@@ -62,7 +61,7 @@ describe('Safe Deployment', () => {
       DEPLOYED_SALT_NONCE
     );
 
-    match(deploymentResult, {
+    await match(deploymentResult, {
       error: ({ error }) => {
         throw new Error(`Failed to build deployment tx: ${error}`);
       },

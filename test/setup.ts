@@ -8,13 +8,13 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await fetch(`${getRpcUrl()}/restart`, {
+  await fetch(`${testConfig.rpcUrl}/restart`, {
     headers: { Connection: 'close' },
   });
 });
 
 afterAll(async () => {
-  await fetch(`${getRpcUrl()}/stop`, {
+  await fetch(`${testConfig.rpcUrl}/stop`, {
     headers: { Connection: 'close' },
   });
   await server.stop();
