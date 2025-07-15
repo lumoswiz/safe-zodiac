@@ -8,19 +8,16 @@ import {
   DUMMY_MODULE,
   SENTINEL_ADDRESS,
 } from '../src/constants';
-import { unwrap } from '../utils';
+import { signAndExec, unwrap } from '../utils';
 import { match } from '../../src/lib/utils';
 import {
   Address,
   createPublicClient,
-  Hex,
   http,
   PublicClient,
   walletActions,
 } from 'viem';
 import { foundry } from 'viem/chains';
-import { generateSafeTypedData } from '../../src/lib/safe-eip712';
-import { SafeTransactionData } from '../../src/types';
 
 describe('Safe Modules', () => {
   let suite: SafeContractSuite;
@@ -58,48 +55,6 @@ describe('Safe Modules', () => {
     });
   });
 
-  async function signAndExec(
-    suite: SafeContractSuite,
-    safeAddress: Address,
-    txData: SafeTransactionData
-  ) {
-    const version = unwrap(await suite.getVersion(safeAddress));
-    const chainId = await publicClient.getChainId();
-    const typedData = generateSafeTypedData({
-      safeAddress,
-      safeVersion: version,
-      chainId,
-      data: txData,
-    });
-    const signature: Hex = await publicClient
-      .extend(walletActions)
-      .signTypedData({
-        account,
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: typedData.primaryType,
-        message: typedData.message,
-      });
-
-    await match(
-      await suite.buildExecTransaction(safeAddress, txData, signature),
-      {
-        error: ({ error }) => {
-          throw new Error(`Could not build execTransaction call: ${error}`);
-        },
-        ok: async ({ value: { to, data, value } }) => {
-          await publicClient.extend(walletActions).sendTransaction({
-            account,
-            chain: null,
-            to,
-            data,
-            value: BigInt(value),
-          });
-        },
-      }
-    );
-  }
-
   test('module is disabled by default', async () => {
     const res = await suite.isModuleEnabled(
       DEPLOYED_SAFE_ADDRESS,
@@ -118,7 +73,7 @@ describe('Safe Modules', () => {
         },
         ok: async ({ value }) => {
           txData = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, txData!);
+          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, txData!, account);
         },
       }
     );
@@ -137,7 +92,7 @@ describe('Safe Modules', () => {
         },
         ok: async ({ value }) => {
           enableTx = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, enableTx!);
+          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, enableTx!, account);
         },
       }
     );
@@ -158,7 +113,7 @@ describe('Safe Modules', () => {
         },
         ok: async ({ value }) => {
           disableTx = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, disableTx!);
+          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, disableTx!, account);
         },
       }
     );
