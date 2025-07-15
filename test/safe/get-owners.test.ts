@@ -16,13 +16,13 @@ import {
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
 
-let DEPLOYED_SAFE_ADDRESS: Address;
-let UNDEPLOYED_SAFE_ADDRESS: Address;
-let testClient: TestClient;
-let publicClient: PublicClient;
-let suite: SafeContractSuite;
-
 describe('Owner Helpers', () => {
+  let DEPLOYED_SAFE_ADDRESS: Address;
+  let UNDEPLOYED_SAFE_ADDRESS: Address;
+  let testClient: TestClient;
+  let publicClient: PublicClient;
+  let suite: SafeContractSuite;
+
   beforeEach(async () => {
     publicClient = createPublicClient({
       chain: foundry,

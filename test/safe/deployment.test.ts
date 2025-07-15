@@ -15,10 +15,10 @@ import {
 } from 'viem';
 import { foundry } from 'viem/chains';
 
-let testClient: TestClient;
-let publicClient: PublicClient;
-
 describe('Safe Deployment', () => {
+  let testClient: TestClient;
+  let publicClient: PublicClient;
+
   beforeEach(async () => {
     publicClient = createPublicClient({
       chain: foundry,

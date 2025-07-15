@@ -14,9 +14,9 @@ export async function match<
   K extends T['status'] = T['status']
 >(
   value: T,
-  handlers: { [P in K]: (val: Extract<T, { status: P }>) => R }
+  handlers: { [P in K]: (val: Extract<T, { status: P }>) => R | Promise<R> }
 ): Promise<R> {
   const handler = handlers[value.status as K];
   if (!handler) throw new Error(`Unhandled case: ${value.status}`);
-  return (await handler(value as any)) as any;
+  return await handler(value as any);
 }
