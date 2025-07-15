@@ -26,7 +26,7 @@ export type BuildMetaTxResult = Result<MetaTransactionData>;
 export type GetSafeTxHashResult = Result<Hex>;
 export type IsTxReadyResult = Result<boolean>;
 export type SafeTransactionDataResult = Result<SafeTransactionData>;
-export type BuildEnableModuleTxResult = Result<{
+export type BuildSignSafeTx = Result<{
   txData: SafeTransactionData;
   safeTxHash: Hex;
 }>;
