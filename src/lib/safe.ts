@@ -38,7 +38,7 @@ import {
   type IsTxReadyResult,
   OperationType,
   SafeTransactionDataResult,
-  BuildEnableModuleTxResult,
+  BuildSignSafeTx,
 } from '../types';
 import { isContractDeployed, match } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
@@ -280,61 +280,26 @@ export class SafeContractSuite {
   async buildEnableModuleTx(
     safe: Address,
     module: Address
-  ): Promise<BuildEnableModuleTxResult> {
-    return match<SafeTransactionDataResult, BuildEnableModuleTxResult>(
-      await this.buildSafeTransactionData(
-        safe,
-        safe,
-        encodeFunctionData({
-          abi: SAFE_PROXY_ABI,
-          functionName: 'enableModule',
-          args: [module],
-        })
-      ),
-      {
-        ok: async ({ value: txData }) => {
-          return match(await this.getVersion(safe), {
-            ok: async ({ value: version }) => {
-              const chainId = await this.client.getChainId();
-              return match<GetSafeTxHashResult, BuildEnableModuleTxResult>(
-                await this.getSafeTransactionHash(
-                  safe,
-                  txData,
-                  version,
-                  chainId
-                ),
-                {
-                  ok: ({ value: safeTxHash }) => ({
-                    status: 'ok',
-                    value: { txData, safeTxHash },
-                  }),
-                  error: ({ error }) => ({ status: 'error', error }),
-                }
-              );
-            },
-            error: ({ error }) => ({ status: 'error', error }),
-          });
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+  ): Promise<BuildSignSafeTx> {
+    const data = encodeFunctionData({
+      abi: SAFE_PROXY_ABI,
+      functionName: 'enableModule',
+      args: [module] as const,
+    });
+    return this.buildSignSafeTx(safe, safe, data);
   }
 
   async buildDisableModuleTx(
     safe: Address,
     prevModule: Address,
     module: Address
-  ): Promise<BuildMetaTxResult> {
-    try {
-      const data = encodeFunctionData({
-        abi: SAFE_PROXY_ABI,
-        functionName: 'disableModule',
-        args: [prevModule, module],
-      });
-      return { status: 'ok', value: { to: safe, value: '0x0', data } };
-    } catch (error) {
-      return { status: 'error', error };
-    }
+  ): Promise<BuildSignSafeTx> {
+    const data = encodeFunctionData({
+      abi: SAFE_PROXY_ABI,
+      functionName: 'disableModule',
+      args: [prevModule, module] as const,
+    });
+    return this.buildSignSafeTx(safe, safe, data);
   }
 
   async getSafeTransactionHash(
@@ -467,6 +432,41 @@ export class SafeContractSuite {
             nonce,
           },
         }),
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
+  }
+
+  private async buildSignSafeTx(
+    safe: Address,
+    to: Address,
+    data: Hex
+  ): Promise<BuildSignSafeTx> {
+    return match<SafeTransactionDataResult, BuildSignSafeTx>(
+      await this.buildSafeTransactionData(safe, to, data),
+      {
+        ok: async ({ value: txData }) =>
+          match(await this.getVersion(safe), {
+            ok: async ({ value: version }) => {
+              const chainId = await this.client.getChainId();
+              return match<GetSafeTxHashResult, BuildSignSafeTx>(
+                await this.getSafeTransactionHash(
+                  safe,
+                  txData,
+                  version,
+                  chainId
+                ),
+                {
+                  ok: ({ value: safeTxHash }) => ({
+                    status: 'ok',
+                    value: { txData, safeTxHash },
+                  }),
+                  error: ({ error }) => ({ status: 'error', error }),
+                }
+              );
+            },
+            error: ({ error }) => ({ status: 'error', error }),
+          }),
         error: ({ error }) => ({ status: 'error', error }),
       }
     );
