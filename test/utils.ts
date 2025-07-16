@@ -136,3 +136,43 @@ export async function deployRoles(
 
   return { rolesAddress, suite };
 }
+
+export async function deploySafeWithRoles(
+  publicClient: PublicClient,
+  saltNonce: bigint = DEPLOYED_SALT_NONCE
+): Promise<{
+  safeAddress: Address;
+  rolesAddress: Address;
+  safeSuite: SafeContractSuite;
+  rolesSuite: ZodiacRolesSuite;
+}> {
+  const { safeAddress, suite: safeSuite } = await deploySafe(
+    publicClient,
+    [account.address],
+    saltNonce
+  );
+
+  const { rolesAddress, suite: rolesSuite } = await deployRoles(
+    publicClient,
+    safeAddress,
+    saltNonce
+  );
+
+  await match(await safeSuite.buildEnableModuleTx(safeAddress, rolesAddress), {
+    error: ({ error }) => {
+      throw new Error(`Could not build enableModule tx: ${error}`);
+    },
+    ok: async ({ value: { txData } }) => {
+      await signAndExec(safeSuite, safeAddress, txData, account);
+    },
+  });
+
+  const enabled = unwrap(
+    await safeSuite.isModuleEnabled(safeAddress, rolesAddress)
+  );
+  if (!enabled) {
+    throw new Error('Roles module failed to enable on the Safe');
+  }
+
+  return { safeAddress, rolesAddress, safeSuite, rolesSuite };
+}
