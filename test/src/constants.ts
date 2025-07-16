@@ -17,3 +17,9 @@ export const SENTINEL_ADDRESS: Address =
 
 export const FAKE_SIGNATURE: Hex =
   '0x9431f0e097afde412772e36790e2174aeab2a5bdc24c8f7428418d29e020cfc76494cc1f271d9d59c8d45cd9ab98bda2b836ae052fd7fba04d56654e32cb0a3e1c';
+
+export const ROLE_KEY: Hex =
+  '0xc29c6ec07d3ee1086915de4d8e516f0ebbe95000ce5c55ad20d66387cc3f104a';
+
+export const ROLE_MEMBER: Address =
+  '0x4aac49716981a089b28d59edf32579ca96243727';

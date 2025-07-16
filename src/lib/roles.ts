@@ -17,9 +17,11 @@ import {
   ROLES_V2_MODULE_MASTERCOPY,
 } from './constants';
 import type {
+  BuildMetaTxResult,
   BuildTxResult,
   CalculateModuleProxyAddressResult,
   IsModuleDeployedResult,
+  IsModuleEnabledResult,
 } from '../types';
 import { isContractDeployed } from './utils';
 
@@ -128,5 +130,46 @@ export class ZodiacRolesSuite {
       functionName: 'setUp',
       args: [inner],
     });
+  }
+
+  async buildAssignRolesTx(
+    module: Address,
+    member: Address,
+    roleKeys: Hex[],
+    memberOf: boolean[]
+  ): Promise<BuildMetaTxResult> {
+    try {
+      return {
+        status: 'ok',
+        value: {
+          to: module,
+          value: '0x00',
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'assignRoles',
+            args: [member, roleKeys, memberOf],
+          }),
+        },
+      };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async isModuleEnabled(
+    module: Address,
+    member: Address
+  ): Promise<IsModuleEnabledResult> {
+    try {
+      const isEnabled = await this.client.readContract({
+        abi: ROLES_V2_MODULE_ABI,
+        address: module,
+        functionName: 'isModuleEnabled',
+        args: [member],
+      });
+      return { status: 'ok', value: isEnabled as boolean };
+    } catch (error) {
+      return { status: 'error', error };
+    }
   }
 }

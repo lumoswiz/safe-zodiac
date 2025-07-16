@@ -442,7 +442,7 @@ export class SafeContractSuite {
     );
   }
 
-  private async buildSignSafeTx(
+  async buildSignSafeTx(
     safe: Address,
     to: Address,
     data: Hex
