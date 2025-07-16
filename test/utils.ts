@@ -1,5 +1,6 @@
 import { Account, Address, Hex, PublicClient, walletActions } from 'viem';
 import { SafeContractSuite } from '../src/lib/safe';
+import { ZodiacRolesSuite } from '../src/lib/roles';
 import { Result, SafeTransactionData } from '../src/types';
 import { generateSafeTypedData } from '../src/lib/safe-eip712';
 import { match } from '../src/lib/utils';
@@ -95,4 +96,43 @@ export async function deploySafe(
   });
 
   return { safeAddress, suite };
+}
+
+export async function deployRoles(
+  publicClient: PublicClient,
+  safeAddress: Address,
+  saltNonce: bigint = DEPLOYED_SALT_NONCE
+): Promise<{
+  rolesAddress: Address;
+  suite: ZodiacRolesSuite;
+}> {
+  const suite = new ZodiacRolesSuite(publicClient);
+
+  const rolesAddress = unwrap(
+    suite.calculateModuleProxyAddress(safeAddress, saltNonce)
+  );
+
+  const txRes = await suite.buildDeployModuleTx(safeAddress, saltNonce);
+
+  await match(txRes, {
+    error: ({ error }) => {
+      throw new Error(error instanceof Error ? error.message : String(error));
+    },
+    skipped: () => {
+      return;
+    },
+    built: async ({ tx }) => {
+      const hash = await publicClient.extend(walletActions).sendTransaction({
+        account,
+        chain: null,
+        to: tx.to,
+        data: tx.data,
+        value: BigInt(tx.value),
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+    },
+  });
+
+  return { rolesAddress, suite };
 }
