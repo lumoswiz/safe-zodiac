@@ -7,3 +7,4 @@ export interface Deployment {
 
 export * from './result';
 export * from './safe';
+export * from './roles';

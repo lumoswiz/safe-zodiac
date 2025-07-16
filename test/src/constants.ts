@@ -25,3 +25,7 @@ export const ROLE_MEMBER: Address =
   '0x4aac49716981a089b28d59edf32579ca96243727';
 
 export const TARGET: Address = '0x8bAB6d1b75f19e9eD9fCe8b9BD338844fF79aE27';
+
+export const SUPPLY_SELECTOR: Hex = '0x7508dd98';
+
+export const WETH: Address = '0x4200000000000000000000000000000000000006';

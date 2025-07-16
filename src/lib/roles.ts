@@ -22,6 +22,8 @@ import type {
   CalculateModuleProxyAddressResult,
   IsModuleDeployedResult,
   IsModuleEnabledResult,
+  ConditionFlat,
+  ExecutionOptions,
 } from '../types';
 import { isContractDeployed } from './utils';
 
@@ -188,6 +190,32 @@ export class ZodiacRolesSuite {
             abi: ROLES_V2_MODULE_ABI,
             functionName: 'scopeTarget',
             args: [roleKey, target],
+          }),
+        },
+      };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
+
+  async buildScopeFunctionTx(
+    module: Address,
+    roleKey: Hex,
+    target: Address,
+    selector: Hex,
+    conditions: ConditionFlat[],
+    executionOpts: ExecutionOptions
+  ): Promise<BuildMetaTxResult> {
+    try {
+      return {
+        status: 'ok',
+        value: {
+          to: module,
+          value: '0x00',
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'scopeFunction',
+            args: [roleKey, target, selector, conditions, executionOpts],
           }),
         },
       };
