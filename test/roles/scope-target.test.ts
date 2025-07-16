@@ -11,11 +11,9 @@ import {
 } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
-import { ROLES_V2_MODULE_ABI } from '../../src/lib/abi';
 import { ZodiacRolesSuite } from '../../src/lib/roles';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, ROLE_KEY, ROLE_MEMBER, TARGET } from '../src/constants';
-import { match } from '../../src/lib/utils';
 
 describe('Scope Target', () => {
   let SAFE_ADDRESS: Address;
