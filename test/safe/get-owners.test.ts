@@ -1,16 +1,10 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
-import { account, DEPLOYED_SALT_NONCE, SALT_NONCE } from '../src/constants';
-import { unwrap } from '../utils';
+import { account, SALT_NONCE } from '../src/constants';
+import { unwrap, deploySafe } from '../utils';
 import { match } from '../../src/lib/utils';
-import {
-  Address,
-  createPublicClient,
-  PublicClient,
-  walletActions,
-  http,
-} from 'viem';
+import { Address, createPublicClient, PublicClient, http } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
 
@@ -28,37 +22,13 @@ describe('Owner Helpers', () => {
 
     suite = new SafeContractSuite(publicClient);
 
-    DEPLOYED_SAFE_ADDRESS = unwrap(
-      await suite.calculateSafeAddress([account.address], DEPLOYED_SALT_NONCE)
-    );
+    ({ safeAddress: DEPLOYED_SAFE_ADDRESS, suite } = await deploySafe(
+      publicClient
+    ));
 
     UNDEPLOYED_SAFE_ADDRESS = unwrap(
       await suite.calculateSafeAddress([account.address], SALT_NONCE)
     );
-
-    const deploymentResult = await suite.buildSafeDeploymentTx(
-      account.address,
-      DEPLOYED_SALT_NONCE
-    );
-
-    await match(deploymentResult, {
-      error: ({ error }) => {
-        throw new Error(`Failed to build deployment tx: ${error}`);
-      },
-      skipped: () => {
-        console.log('Deployment skipped, Safe already exists');
-        return;
-      },
-      built: async ({ tx }) => {
-        await publicClient.extend(walletActions).sendTransaction({
-          account,
-          chain: null,
-          to: tx.to,
-          data: tx.data,
-          value: BigInt(tx.value),
-        });
-      },
-    });
   });
 
   test('getOwners includes the deployer', async () => {
