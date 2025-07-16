@@ -176,3 +176,59 @@ export async function deploySafeWithRoles(
 
   return { safeAddress, rolesAddress, safeSuite, rolesSuite };
 }
+
+export async function deployAndSetupRoles(
+  publicClient: PublicClient,
+  {
+    member,
+    roleKeys,
+    memberOf,
+    saltNonce = DEPLOYED_SALT_NONCE,
+  }: {
+    member: Address;
+    roleKeys: Hex[];
+    memberOf: boolean[];
+    saltNonce?: bigint;
+  }
+): Promise<{
+  safeAddress: Address;
+  rolesAddress: Address;
+  safeSuite: SafeContractSuite;
+  rolesSuite: ZodiacRolesSuite;
+}> {
+  const { safeAddress, rolesAddress, safeSuite, rolesSuite } =
+    await deploySafeWithRoles(publicClient, saltNonce);
+
+  await match(
+    await rolesSuite.buildAssignRolesTx(
+      rolesAddress,
+      member,
+      roleKeys,
+      memberOf
+    ),
+    {
+      error: ({ error }) => {
+        throw new Error(`Could not build Roles tx: ${error}`);
+      },
+      ok: async ({ value: { to, data } }) => {
+        await match(await safeSuite.buildSignSafeTx(safeAddress, to, data), {
+          error: ({ error }) => {
+            throw new Error(`Could not wrap in Safe tx: ${error}`);
+          },
+          ok: async ({ value: { txData } }) => {
+            await signAndExec(safeSuite, safeAddress, txData, account);
+          },
+        });
+      },
+    }
+  );
+
+  const enabled = unwrap(
+    await safeSuite.isModuleEnabled(safeAddress, rolesAddress)
+  );
+  if (!enabled) {
+    throw new Error('Roles module failed to stay enabled on the Safe');
+  }
+
+  return { safeAddress, rolesAddress, safeSuite, rolesSuite };
+}
