@@ -172,4 +172,27 @@ export class ZodiacRolesSuite {
       return { status: 'error', error };
     }
   }
+
+  async buildScopeTargetTx(
+    module: Address,
+    roleKey: Hex,
+    target: Address
+  ): Promise<BuildMetaTxResult> {
+    try {
+      return {
+        status: 'ok',
+        value: {
+          to: module,
+          value: '0x00',
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'scopeTarget',
+            args: [roleKey, target],
+          }),
+        },
+      };
+    } catch (error) {
+      return { status: 'error', error };
+    }
+  }
 }

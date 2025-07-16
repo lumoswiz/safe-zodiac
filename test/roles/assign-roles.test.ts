@@ -1,13 +1,7 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { deploySafeWithRoles, signAndExec } from '../utils';
-import {
-  Address,
-  createPublicClient,
-  PublicClient,
-  http,
-  walletActions,
-} from 'viem';
+import { Address, createPublicClient, PublicClient, http } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
 import { ZodiacRolesSuite } from '../../src/lib/roles';
