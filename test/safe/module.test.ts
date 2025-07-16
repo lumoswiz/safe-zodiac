@@ -2,21 +2,10 @@ import '../setup';
 import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
-import {
-  account,
-  DEPLOYED_SALT_NONCE,
-  DUMMY_MODULE,
-  SENTINEL_ADDRESS,
-} from '../src/constants';
-import { signAndExec, unwrap } from '../utils';
+import { account, DUMMY_MODULE, SENTINEL_ADDRESS } from '../src/constants';
+import { signAndExec, unwrap, deploySafe } from '../utils';
 import { match } from '../../src/lib/utils';
-import {
-  Address,
-  createPublicClient,
-  http,
-  PublicClient,
-  walletActions,
-} from 'viem';
+import { Address, createPublicClient, http, PublicClient } from 'viem';
 import { foundry } from 'viem/chains';
 
 describe('Safe Modules', () => {
@@ -31,28 +20,9 @@ describe('Safe Modules', () => {
     });
     suite = new SafeContractSuite(publicClient);
 
-    DEPLOYED_SAFE_ADDRESS = unwrap(
-      await suite.calculateSafeAddress([account.address], DEPLOYED_SALT_NONCE)
-    );
-    const txRes = await suite.buildSafeDeploymentTx(
-      account.address,
-      DEPLOYED_SALT_NONCE
-    );
-    await match(txRes, {
-      error: ({ error }) => {
-        throw new Error(error instanceof Error ? error.message : String(error));
-      },
-      skipped: () => {},
-      built: async ({ tx }) => {
-        await publicClient.extend(walletActions).sendTransaction({
-          account,
-          chain: null,
-          to: tx.to,
-          data: tx.data,
-          value: BigInt(tx.value),
-        });
-      },
-    });
+    ({ safeAddress: DEPLOYED_SAFE_ADDRESS, suite } = await deploySafe(
+      publicClient
+    ));
   });
 
   test('module is disabled by default', async () => {

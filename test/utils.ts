@@ -1,8 +1,9 @@
-import { Account, Address, Hex, walletActions } from 'viem';
+import { Account, Address, Hex, PublicClient, walletActions } from 'viem';
 import { SafeContractSuite } from '../src/lib/safe';
 import { Result, SafeTransactionData } from '../src/types';
 import { generateSafeTypedData } from '../src/lib/safe-eip712';
 import { match } from '../src/lib/utils';
+import { account, DEPLOYED_SALT_NONCE } from './src/constants';
 
 export function unwrap<T>(res: Result<T>): T {
   if (res.status === 'ok') return res.value;
@@ -60,4 +61,38 @@ export async function signAndExec(
       },
     }
   );
+}
+
+export async function deploySafe(
+  publicClient: PublicClient,
+  owners: Address[] = [account.address],
+  saltNonce: bigint = DEPLOYED_SALT_NONCE
+): Promise<{ safeAddress: Address; suite: SafeContractSuite }> {
+  const suite = new SafeContractSuite(publicClient);
+
+  const safeAddress = unwrap(
+    await suite.calculateSafeAddress(owners, saltNonce)
+  );
+
+  const txRes = await suite.buildSafeDeploymentTx(owners[0], saltNonce);
+
+  await match(txRes, {
+    error: ({ error }) => {
+      throw new Error(error instanceof Error ? error.message : String(error));
+    },
+    skipped: () => {},
+    built: async ({ tx }) => {
+      const hash = await publicClient.extend(walletActions).sendTransaction({
+        account,
+        chain: null,
+        to: tx.to,
+        data: tx.data,
+        value: BigInt(tx.value),
+      });
+
+      await publicClient.waitForTransactionReceipt({ hash });
+    },
+  });
+
+  return { safeAddress, suite };
 }
