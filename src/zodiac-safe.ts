@@ -9,7 +9,6 @@ import {
 import { SafeContractSuite } from './lib/safe';
 import { ZodiacRolesSuite } from './lib/roles';
 import {
-  BuildMetaTxArrayResult,
   GetOwnersResult,
   IsValidSafeResult,
   MetaTransactionData,
@@ -32,6 +31,7 @@ import {
   IsModuleEnabledResult,
 } from './types';
 import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
+import { fetchRole } from './lib/subgraph';
 
 export class ZodiacSafeSuite {
   readonly client: PublicClient;
