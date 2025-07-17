@@ -1,4 +1,4 @@
-import { Hex } from 'viem';
+import { Address, Hex } from 'viem';
 
 export interface ConditionFlat {
   parent: number;
@@ -58,3 +58,18 @@ export enum ExecutionOptions {
   DelegateCall = 2,
   Both = 3,
 }
+
+export interface RoleScope {
+  selectors: Hex;
+  conditions: ConditionFlat[];
+  execOpts?: ExecutionOptions;
+}
+
+export interface RolesSetupArgs {
+  member: Address;
+  roleKey: Hex;
+  target: Address;
+  scopes: RoleScope[];
+}
+
+export type PartialRolesSetupArgs = Partial<RolesSetupArgs>;

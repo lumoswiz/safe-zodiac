@@ -5,6 +5,15 @@ export interface Deployment {
   address: Address;
 }
 
+export enum SetupStage {
+  DeploySafe,
+  DeployModule,
+  EnableModule,
+  AssignRoles,
+  ScopeTarget,
+  ScopeFunctions,
+}
+
 export * from './result';
 export * from './safe';
 export * from './roles';
