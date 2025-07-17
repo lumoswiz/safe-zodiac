@@ -53,3 +53,7 @@ export type EnsureRolesResult = Result<{
   rolesAddress: Address;
   metaTxs: MetaTransactionData[];
 }>;
+
+export type EnsureModuleEnabledResult = Result<{
+  metaTxs: MetaTransactionData[];
+}>;

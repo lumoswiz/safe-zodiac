@@ -28,6 +28,8 @@ import {
   SetupStage,
   PartialRolesSetupArgs,
   CalculateSafeAddressResult,
+  EnsureModuleEnabledResult,
+  IsModuleEnabledResult,
 } from './types';
 import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
 
@@ -91,6 +93,48 @@ export class ZodiacSafeSuite {
         SetupStage.DeployModule
       );
       setupTxs.push(...extra.setupTxs);
+      multisendTxs.push(...extra.multisendTxs);
+      return { status: 'ok', value: { setupTxs, multisendTxs } };
+    }
+
+    const rolesRes = await this.ensureRolesModule(safeAddress, rolesNonce);
+    const rolesVal = unwrapOrFail(rolesRes);
+    if (maybeError(rolesVal)) return { status: 'error', error: rolesVal };
+
+    const { rolesAddress, metaTxs: rolesTxs } = rolesVal;
+
+    setupTxs.push(...rolesTxs);
+
+    if (rolesTxs.length > 0) {
+      const extra = await this.buildInitialSetupTxs(
+        safeAddress,
+        owner,
+        safeNonce,
+        rolesNonce,
+        rolesSetup,
+        SetupStage.EnableModule
+      );
+      setupTxs.push(...extra.setupTxs);
+      multisendTxs.push(...extra.multisendTxs);
+      return { status: 'ok', value: { setupTxs, multisendTxs } };
+    }
+
+    const enableRes = await this.ensureModuleEnabled(safeAddress, rolesAddress);
+    const enableVal = unwrapOrFail(enableRes);
+    if (maybeError(enableVal)) return { status: 'error', error: enableVal };
+
+    const enableTxs = enableVal.metaTxs;
+    multisendTxs.push(...enableTxs);
+
+    if (enableTxs.length > 0) {
+      const extra = await this.buildInitialSetupTxs(
+        safeAddress,
+        owner,
+        safeNonce,
+        rolesNonce,
+        rolesSetup,
+        SetupStage.AssignRoles
+      );
       multisendTxs.push(...extra.multisendTxs);
       return { status: 'ok', value: { setupTxs, multisendTxs } };
     }
@@ -422,5 +466,42 @@ export class ZodiacSafeSuite {
         }
       )
     );
+  }
+
+  private async ensureModuleEnabled(
+    safe: Address,
+    module: Address
+  ): Promise<EnsureModuleEnabledResult> {
+    const enabledRes = await match<IsModuleEnabledResult, Result<boolean>>(
+      await this.safeSuite.isModuleEnabled(safe, module),
+      {
+        ok: ({ value }) => ({ status: 'ok', value }),
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
+
+    const isEnabled = unwrapOrFail(enabledRes);
+    if (maybeError(isEnabled)) {
+      return { status: 'error', error: isEnabled };
+    }
+
+    if (isEnabled) {
+      return { status: 'ok', value: { metaTxs: [] } };
+    }
+
+    const buildRes = await match<BuildSignSafeTx, Result<MetaTransactionData>>(
+      await this.safeSuite.buildEnableModuleTx(safe, module),
+      {
+        ok: ({ value: { txData } }) => ({ status: 'ok', value: txData }),
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
+
+    const enableTx = unwrapOrFail(buildRes);
+    if (maybeError(enableTx)) {
+      return { status: 'error', error: enableTx };
+    }
+
+    return { status: 'ok', value: { metaTxs: [enableTx] } };
   }
 }
