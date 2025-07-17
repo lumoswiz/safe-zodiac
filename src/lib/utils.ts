@@ -1,4 +1,5 @@
 import { type PublicClient, type Address } from 'viem';
+import { Result } from '../types';
 
 export async function isContractDeployed(
   client: PublicClient,
@@ -20,3 +21,14 @@ export async function match<
   if (!handler) throw new Error(`Unhandled case: ${value.status}`);
   return await handler(value as any);
 }
+
+export function unwrapOrFail<R, E>(
+  res: Result<R, E>
+): R | (E & { _isError: true }) {
+  if (res.status === 'ok') return res.value;
+  return { ...res.error, _isError: true };
+}
+
+export const maybeError = <T>(
+  val: T | { _isError: true }
+): val is { _isError: true } => (val as any)._isError;

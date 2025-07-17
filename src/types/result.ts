@@ -35,3 +35,15 @@ export type BuildTxResult =
   | { status: 'skipped' }
   | { status: 'built'; tx: MetaTransactionData }
   | Err<unknown>;
+
+export type BuildMetaTxArrayResult = Result<MetaTransactionData[]>;
+
+export type IsValidSafeResult = Result<boolean>;
+export type EnsureSafeResult = Result<{
+  safeAddress: Address;
+  metaTxs: MetaTransactionData[];
+}>;
+export type EnsureRolesResult = Result<{
+  rolesAddress: Address;
+  metaTxs: MetaTransactionData[];
+}>;
