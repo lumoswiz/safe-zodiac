@@ -26,6 +26,8 @@ export type BuildMetaTxResult = Result<MetaTransactionData>;
 export type GetSafeTxHashResult = Result<Hex>;
 export type IsTxReadyResult = Result<boolean>;
 export type SafeTransactionDataResult = Result<SafeTransactionData>;
+export type IsValidSafeResult = Result<boolean>;
+
 export type BuildSignSafeTx = Result<{
   txData: SafeTransactionData;
   safeTxHash: Hex;
@@ -38,7 +40,11 @@ export type BuildTxResult =
 
 export type BuildMetaTxArrayResult = Result<MetaTransactionData[]>;
 
-export type IsValidSafeResult = Result<boolean>;
+export type BuildTxBucketsResult = Result<{
+  setupTxs: MetaTransactionData[];
+  multisendTxs: MetaTransactionData[];
+}>;
+
 export type EnsureSafeResult = Result<{
   safeAddress: Address;
   metaTxs: MetaTransactionData[];

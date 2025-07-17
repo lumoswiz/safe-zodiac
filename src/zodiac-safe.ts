@@ -2,6 +2,7 @@ import {
   Address,
   ContractFunctionExecutionError,
   ContractFunctionRevertedError,
+  Hex,
   isAddressEqual,
   PublicClient,
 } from 'viem';
@@ -18,8 +19,17 @@ import {
   EnsureRolesResult,
   IsModuleDeployedResult,
   CalculateModuleProxyAddressResult,
+  BuildTxBucketsResult,
+  ExecutionOptions,
+  RolesSetupArgs,
+  BuildSignSafeTx,
+  BuildMetaTxResult,
+  RoleScope,
+  SetupStage,
+  PartialRolesSetupArgs,
+  CalculateSafeAddressResult,
 } from './types';
-import { match, maybeError, unwrapOrFail } from './lib/utils';
+import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
 
 export class ZodiacSafeSuite {
   readonly client: PublicClient;
@@ -38,29 +48,55 @@ export class ZodiacSafeSuite {
     safe: Address | undefined,
     owner: Address,
     safeNonce: bigint,
+    rolesSetup: PartialRolesSetupArgs = {},
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE
-  ): Promise<BuildMetaTxArrayResult> {
-    const allMetaTxs: MetaTransactionData[] = [];
+  ): Promise<BuildTxBucketsResult> {
+    if (!safe) {
+      const predicted: Address = await expectValue(
+        this.safeSuite.calculateSafeAddress([owner], safeNonce).then((res) =>
+          match<CalculateSafeAddressResult, Result<Address>>(res, {
+            ok: ({ value }) => ({ status: 'ok', value }),
+            error: ({ error }) => ({ status: 'error', error }),
+          })
+        )
+      );
 
-    const safeEnsured = await this.ensureSingleOwnerSafe(
-      safe,
-      owner,
-      safeNonce
-    );
-    const safeVal = unwrapOrFail(safeEnsured);
+      const allBuckets = await this.buildInitialSetupTxs(
+        predicted,
+        owner,
+        safeNonce,
+        rolesNonce,
+        rolesSetup,
+        SetupStage.DeploySafe
+      );
+      return { status: 'ok', value: allBuckets };
+    }
+
+    const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
+    const safeVal = unwrapOrFail(safeRes);
     if (maybeError(safeVal)) return { status: 'error', error: safeVal };
 
     const { safeAddress, metaTxs: safeTxs } = safeVal;
-    allMetaTxs.push(...safeTxs);
 
-    const rolesEnsured = await this.ensureRolesModule(safeAddress, rolesNonce);
-    const rolesVal = unwrapOrFail(rolesEnsured);
-    if (maybeError(rolesVal)) return { status: 'error', error: rolesVal };
+    const setupTxs: MetaTransactionData[] = [...safeTxs];
+    const multisendTxs: MetaTransactionData[] = [];
 
-    const { rolesAddress, metaTxs: rolesTxs } = rolesVal;
-    allMetaTxs.push(...rolesTxs);
+    if (safeTxs.length > 0) {
+      const extra = await this.buildInitialSetupTxs(
+        safeAddress,
+        owner,
+        safeNonce,
+        rolesNonce,
+        rolesSetup,
+        SetupStage.DeployModule
+      );
+      setupTxs.push(...extra.setupTxs);
+      multisendTxs.push(...extra.multisendTxs);
+      return { status: 'ok', value: { setupTxs, multisendTxs } };
+    }
 
-    return { status: 'ok', value: allMetaTxs };
+    // Add to here later
+    return { status: 'ok', value: { setupTxs, multisendTxs } };
   }
 
   private async ensureSingleOwnerSafe(
@@ -182,7 +218,7 @@ export class ZodiacSafeSuite {
       Result<MetaTransactionData | null>
     >(await this.rolesSuite.buildDeployModuleTx(safe, rolesNonce), {
       built: ({ tx }) => ({ status: 'ok', value: tx }),
-      skipped: () => ({ status: 'ok', value: null }), // shouldn’t fire now
+      skipped: () => ({ status: 'ok', value: null }),
       error: ({ error }) => ({ status: 'error', error }),
     });
 
@@ -191,5 +227,200 @@ export class ZodiacSafeSuite {
 
     const metaTxs = txOrNull ? [txOrNull] : [];
     return { status: 'ok', value: { rolesAddress, metaTxs } };
+  }
+
+  private async buildInitialSetupTxs(
+    safeAddress: Address,
+    owner: Address,
+    safeNonce: bigint,
+    rolesNonce: bigint,
+    rolesSetup: PartialRolesSetupArgs = {},
+    startAt: SetupStage
+  ): Promise<{
+    setupTxs: MetaTransactionData[];
+    multisendTxs: MetaTransactionData[];
+  }> {
+    const setupTxs: MetaTransactionData[] = [];
+    const multisendTxs: MetaTransactionData[] = [];
+
+    const rolesAddress = await expectValue(
+      match<CalculateModuleProxyAddressResult, Result<Address>>(
+        this.rolesSuite.calculateModuleProxyAddress(safeAddress, rolesNonce),
+        {
+          ok: ({ value }) => ({ status: 'ok', value }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+
+    type StepFn = () => Promise<void>;
+
+    const steps: Record<SetupStage, StepFn> = {
+      [SetupStage.DeploySafe]: async () => {
+        setupTxs.push(await this.buildSafeDeployTx(owner, safeNonce));
+      },
+      [SetupStage.DeployModule]: async () => {
+        const tx = await this.buildRolesDeployTx(safeAddress, rolesNonce);
+        if (tx) setupTxs.push(tx);
+      },
+      [SetupStage.EnableModule]: async () => {
+        multisendTxs.push(
+          await this.buildEnableModuleTx(safeAddress, rolesAddress)
+        );
+      },
+      [SetupStage.AssignRoles]: async () => {
+        if (!rolesSetup.member || !rolesSetup.roleKey) {
+          throw new Error('member and roleKey required for AssignRoles');
+        }
+        multisendTxs.push(
+          await this.buildAssignRolesTx(
+            rolesAddress,
+            rolesSetup as RolesSetupArgs
+          )
+        );
+      },
+      [SetupStage.ScopeTarget]: async () => {
+        if (!rolesSetup.target || !rolesSetup.roleKey) {
+          throw new Error('target and roleKey required for ScopeTarget');
+        }
+        multisendTxs.push(
+          await this.buildScopeTargetTx(
+            rolesAddress,
+            rolesSetup as RolesSetupArgs
+          )
+        );
+      },
+      [SetupStage.ScopeFunctions]: async () => {
+        if (!rolesSetup.scopes || !rolesSetup.target || !rolesSetup.roleKey) {
+          throw new Error(
+            'scopes, target, and roleKey required for ScopeFunctions'
+          );
+        }
+        for (const s of rolesSetup.scopes) {
+          multisendTxs.push(
+            await this.buildScopeFunctionTx(
+              rolesAddress,
+              rolesSetup as RolesSetupArgs,
+              s
+            )
+          );
+        }
+      },
+    };
+
+    for (let stage = startAt; stage <= SetupStage.ScopeFunctions; stage++) {
+      await steps[stage]();
+    }
+
+    return { setupTxs, multisendTxs };
+  }
+
+  private async buildSafeDeployTx(
+    owner: Address,
+    nonce: bigint
+  ): Promise<MetaTransactionData> {
+    return expectValue(
+      match<BuildTxResult, Result<MetaTransactionData>>(
+        await this.safeSuite.buildSafeDeploymentTx(owner, nonce),
+        {
+          built: ({ tx }) => ({ status: 'ok', value: tx }),
+          skipped: () => ({ status: 'error', error: 'unexpected skip' }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+  }
+
+  private async buildRolesDeployTx(
+    safeAddr: Address,
+    nonce: bigint
+  ): Promise<MetaTransactionData | null> {
+    return expectValue(
+      match<BuildTxResult, Result<MetaTransactionData | null>>(
+        await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce),
+        {
+          built: ({ tx }) => ({ status: 'ok', value: tx }),
+          skipped: () => ({ status: 'ok', value: null }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+  }
+
+  private async buildEnableModuleTx(
+    safeAddr: Address,
+    moduleAddr: Address
+  ): Promise<MetaTransactionData> {
+    return expectValue(
+      match<BuildSignSafeTx, Result<MetaTransactionData>>(
+        await this.safeSuite.buildEnableModuleTx(safeAddr, moduleAddr),
+        {
+          ok: ({ value: { txData } }) => ({ status: 'ok', value: txData }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+  }
+
+  private async buildAssignRolesTx(
+    moduleAddr: Address,
+    setup: RolesSetupArgs
+  ): Promise<MetaTransactionData> {
+    return expectValue(
+      match<BuildMetaTxResult, Result<MetaTransactionData>>(
+        await this.rolesSuite.buildAssignRolesTx(
+          moduleAddr,
+          setup.member,
+          [setup.roleKey],
+          [true]
+        ),
+        {
+          ok: ({ value }) => ({ status: 'ok', value }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+  }
+
+  private async buildScopeTargetTx(
+    moduleAddr: Address,
+    setup: RolesSetupArgs
+  ): Promise<MetaTransactionData> {
+    return expectValue(
+      match<BuildMetaTxResult, Result<MetaTransactionData>>(
+        await this.rolesSuite.buildScopeTargetTx(
+          moduleAddr,
+          setup.roleKey,
+          setup.target
+        ),
+        {
+          ok: ({ value }) => ({ status: 'ok', value }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
+  }
+
+  private async buildScopeFunctionTx(
+    moduleAddr: Address,
+    setup: RolesSetupArgs,
+    scope: RoleScope
+  ): Promise<MetaTransactionData> {
+    return expectValue(
+      match<BuildMetaTxResult, Result<MetaTransactionData>>(
+        await this.rolesSuite.buildScopeFunctionTx(
+          moduleAddr,
+          setup.roleKey,
+          setup.target,
+          scope.selectors,
+          scope.conditions,
+          scope.execOpts ?? ExecutionOptions.Send
+        ),
+        {
+          ok: ({ value }) => ({ status: 'ok', value }),
+          error: ({ error }) => ({ status: 'error', error }),
+        }
+      )
+    );
   }
 }
