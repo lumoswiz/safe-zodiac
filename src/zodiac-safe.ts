@@ -1,9 +1,12 @@
 import {
+  Account,
   Address,
   ContractFunctionExecutionError,
   ContractFunctionRevertedError,
+  Hex,
   isAddressEqual,
   PublicClient,
+  walletActions,
 } from 'viem';
 import { SafeContractSuite } from './lib/safe';
 import { ZodiacRolesSuite } from './lib/roles';
@@ -28,8 +31,10 @@ import {
   CalculateSafeAddressResult,
   EnsureModuleEnabledResult,
   IsModuleEnabledResult,
+  SafeTransactionData,
 } from './types';
 import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
+import { generateSafeTypedData } from './lib/safe-eip712';
 
 export class ZodiacSafeSuite {
   readonly safeSuite: SafeContractSuite;
@@ -137,6 +142,37 @@ export class ZodiacSafeSuite {
 
     // Add to here later
     return { status: 'ok', value: { setupTxs, multisendTxs } };
+  }
+
+  async signTx(
+    safeAddress: Address,
+    txData: SafeTransactionData,
+    account: Account
+  ): Promise<Hex> {
+    const versionRes = await this.safeSuite.getVersion(safeAddress);
+    const version = unwrapOrFail(versionRes);
+    if (maybeError(version)) throw version;
+
+    const chainId = await this.safeSuite.client.getChainId();
+
+    const typedData = generateSafeTypedData({
+      safeAddress,
+      safeVersion: version,
+      chainId,
+      data: txData,
+    });
+
+    const signature = await this.safeSuite.client
+      .extend(walletActions)
+      .signTypedData({
+        account,
+        domain: typedData.domain,
+        types: typedData.types,
+        primaryType: typedData.primaryType,
+        message: typedData.message,
+      });
+
+    return signature;
   }
 
   private async ensureSingleOwnerSafe(
