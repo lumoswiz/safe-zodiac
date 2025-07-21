@@ -148,31 +148,32 @@ export class ZodiacSafeSuite {
     safeAddress: Address,
     txData: SafeTransactionData,
     account: Account
-  ): Promise<Hex> {
-    const versionRes = await this.safeSuite.getVersion(safeAddress);
-    const version = unwrapOrFail(versionRes);
-    if (maybeError(version)) throw version;
+  ): Promise<Result<Hex>> {
+    try {
+      const version = await expectValue(this.safeSuite.getVersion(safeAddress));
+      const chainId = await this.safeSuite.client.getChainId();
 
-    const chainId = await this.safeSuite.client.getChainId();
-
-    const typedData = generateSafeTypedData({
-      safeAddress,
-      safeVersion: version,
-      chainId,
-      data: txData,
-    });
-
-    const signature = await this.safeSuite.client
-      .extend(walletActions)
-      .signTypedData({
-        account,
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: typedData.primaryType,
-        message: typedData.message,
+      const typedData = generateSafeTypedData({
+        safeAddress,
+        safeVersion: version,
+        chainId,
+        data: txData,
       });
 
-    return signature;
+      const signature = await this.safeSuite.client
+        .extend(walletActions)
+        .signTypedData({
+          account,
+          domain: typedData.domain,
+          types: typedData.types,
+          primaryType: typedData.primaryType,
+          message: typedData.message,
+        });
+
+      return { status: 'ok', value: signature };
+    } catch (error) {
+      return { status: 'error', error };
+    }
   }
 
   private async ensureSingleOwnerSafe(
