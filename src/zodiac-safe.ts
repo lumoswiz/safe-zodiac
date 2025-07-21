@@ -2,7 +2,6 @@ import {
   Address,
   ContractFunctionExecutionError,
   ContractFunctionRevertedError,
-  Hex,
   isAddressEqual,
   PublicClient,
 } from 'viem';
@@ -31,22 +30,19 @@ import {
   IsModuleEnabledResult,
 } from './types';
 import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
-import { fetchRole } from './lib/subgraph';
 
 export class ZodiacSafeSuite {
-  readonly client: PublicClient;
   readonly safeSuite: SafeContractSuite;
   readonly rolesSuite: ZodiacRolesSuite;
   private static readonly DEFAULT_ROLES_NONCE: bigint =
     46303759331860629381431170770107494699648271559618626860680275899814502026071n;
 
   constructor(publicClient: PublicClient) {
-    this.client = publicClient;
     this.safeSuite = new SafeContractSuite(publicClient);
     this.rolesSuite = new ZodiacRolesSuite(publicClient);
   }
 
-  private async buildAllTx(
+  async buildAllTx(
     safe: Address | undefined,
     owner: Address,
     safeNonce: bigint,

@@ -1,4 +1,4 @@
-import { Hex } from 'viem';
+import { Address, Hex } from 'viem';
 import {
   Clearance,
   ExecutionOptions,
@@ -6,6 +6,7 @@ import {
   RawSubgraphRole,
   SubgraphRole,
 } from '../types';
+import { CHAINS } from './constants';
 
 export type FetchOptions = Omit<RequestInit, 'method' | 'body'>;
 
@@ -94,22 +95,35 @@ query Role($id: ID!) {
 }
 `.trim();
 
-function getRoleId(chainId: number, address: Address, roleKey: Hex): Hex {}
+export function getRoleId(
+  chainId: number,
+  address: Address,
+  roleKey: Hex
+): Hex {
+  const chain = CHAINS[chainId];
+  if (!chain) {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+  return `${chain.prefix}:${address.toLowerCase()}:${roleKey}` as Hex;
+}
 
 export const fetchRole = async (
+  chainId: number,
+  address: Address,
   roleKey: Hex,
   options?: FetchOptions
 ): Promise<FetchRoleResult> => {
   try {
+    const id = getRoleId(chainId, address, roleKey);
+
     const { role } = await fetchFromSubgraph<{ role: SubgraphRole | null }>(
       {
         query: ROLE_QUERY,
-        variables: { id: roleKey },
+        variables: { id },
         operationName: 'Role',
       },
       options
     );
-
     return { status: 'ok', value: role };
   } catch (error) {
     return { status: 'error', error };
