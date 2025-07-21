@@ -17,3 +17,4 @@ export enum SetupStage {
 export * from './result';
 export * from './safe';
 export * from './roles';
+export * from './subgraph';

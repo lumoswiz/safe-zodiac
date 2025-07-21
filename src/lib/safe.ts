@@ -11,7 +11,7 @@ import {
   type PublicClient,
 } from 'viem';
 import {
-  SAFE_NETWORKS,
+  CHAINS,
   SAFE_PROXY_FACTORY,
   SAFE_SINGLETON,
   SAFE_VERSIONS,
@@ -129,7 +129,7 @@ export class SafeContractSuite {
   async getModulesForSafe(safe: Address): Promise<GetModulesResult> {
     try {
       const chainId = await this.client.getChainId();
-      const network = SAFE_NETWORKS[chainId];
+      const network = CHAINS[chainId]!.name;
       if (!network) {
         return {
           status: 'error',

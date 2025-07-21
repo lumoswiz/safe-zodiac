@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "^1.2.18"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -13,6 +13,6 @@
     "@types/semver": "^7.7.0",
     "prool": "^0.0.24",
     "semver": "^7.7.2",
-    "viem": "^2.31.7"
+    "viem": "^2.33.0"
   }
 }

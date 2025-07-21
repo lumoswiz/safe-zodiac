@@ -25,22 +25,22 @@ export const SAFE_PROXY_FACTORY: Address =
 export const SAFE_SINGLETON: Address =
   '0x29fcB43b46531BcA003ddC8FCB67FFE91900C762';
 
-export const SAFE_NETWORKS: { [chainId: number]: string } = {
-  1: 'mainnet',
-  10: 'optimism',
-  56: 'binance',
-  97: 'bsc-testnet',
-  100: 'gnosis-chain',
-  130: 'unichain',
-  137: 'polygon',
-  146: 'sonic',
-  42161: 'arbitrum',
-  43113: 'avalanche-fuji',
-  43114: 'avalanche',
-  480: 'world-chain',
-  80001: 'polygon-mumbai',
-  8453: 'base',
-  11155111: 'sepolia',
+export const CHAINS: Record<number, { name: string; prefix: string }> = {
+  1: { name: 'mainnet', prefix: 'eth' },
+  10: { name: 'optimism', prefix: 'oeth' },
+  56: { name: 'binance', prefix: 'bnb' },
+  97: { name: 'bsc-testnet', prefix: 'bnbt' },
+  100: { name: 'gnosis-chain', prefix: 'gno' },
+  130: { name: 'unichain', prefix: 'unichain' },
+  137: { name: 'polygon', prefix: 'matic' },
+  146: { name: 'sonic', prefix: 'sonic' },
+  42161: { name: 'arbitrum', prefix: 'arb1' },
+  43113: { name: 'avalanche-fuji', prefix: 'avaxt' },
+  43114: { name: 'avalanche', prefix: 'avax' },
+  480: { name: 'world-chain', prefix: 'world' },
+  80001: { name: 'polygon-mumbai', prefix: 'matict' },
+  8453: { name: 'base', prefix: 'base' },
+  11155111: { name: 'sepolia', prefix: 'sep' },
 };
 
 export const PROXY_BYTECODE_PREFIX: Hex =

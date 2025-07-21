@@ -4,6 +4,7 @@ import type {
   SafeTransactionData,
   SafeVersion,
 } from './safe';
+import { SubgraphRole } from './subgraph';
 
 export type Ok<T> = { status: 'ok'; value: T };
 export type Err<E> = { status: 'error'; error: E };
@@ -27,6 +28,7 @@ export type GetSafeTxHashResult = Result<Hex>;
 export type IsTxReadyResult = Result<boolean>;
 export type SafeTransactionDataResult = Result<SafeTransactionData>;
 export type IsValidSafeResult = Result<boolean>;
+export type IsRoleAssignedResult = Result<boolean>;
 
 export type BuildSignSafeTx = Result<{
   txData: SafeTransactionData;
@@ -57,3 +59,5 @@ export type EnsureRolesResult = Result<{
 export type EnsureModuleEnabledResult = Result<{
   metaTxs: MetaTransactionData[];
 }>;
+
+export type FetchRoleResult = Result<SubgraphRole | null>;
