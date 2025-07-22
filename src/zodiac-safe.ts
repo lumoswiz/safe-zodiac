@@ -35,6 +35,7 @@ import {
 } from './types';
 import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
 import { generateSafeTypedData } from './lib/safe-eip712';
+import { encodeMulti } from './lib/multisend';
 
 export class ZodiacSafeSuite {
   readonly safeSuite: SafeContractSuite;
@@ -174,6 +175,88 @@ export class ZodiacSafeSuite {
     } catch (error) {
       return { status: 'error', error };
     }
+  }
+
+  async signMultisendTx(
+    safe: Address,
+    multisendTxs: MetaTransactionData[],
+    account: Account
+  ): Promise<Result<{ txData: SafeTransactionData; signature: Hex }>> {
+    const multisendTx = encodeMulti(multisendTxs);
+
+    return match(
+      await this.safeSuite.buildSignSafeTx(
+        safe,
+        multisendTx.to,
+        multisendTx.data,
+        multisendTx.operation
+      ),
+      {
+        ok: async ({ value: { txData } }) => {
+          try {
+            const version = await this.safeSuite
+              .getVersion(safe)
+              .then(unwrapOrFail);
+            const chainId = await this.safeSuite.client.getChainId();
+
+            const typedData = generateSafeTypedData({
+              safeAddress: safe,
+              safeVersion: version,
+              chainId,
+              data: txData,
+            });
+
+            const signature = await this.safeSuite.client
+              .extend(walletActions)
+              .signTypedData({
+                account,
+                domain: typedData.domain,
+                types: typedData.types,
+                primaryType: typedData.primaryType,
+                message: typedData.message,
+              });
+
+            return { status: 'ok', value: { txData, signature } };
+          } catch (error) {
+            return { status: 'error', error };
+          }
+        },
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
+  }
+
+  async execTx(
+    safe: Address,
+    txData: SafeTransactionData,
+    signature: Hex,
+    account: Account
+  ): Promise<Result<void>> {
+    return match(
+      await this.safeSuite.buildExecTransaction(safe, txData, signature),
+      {
+        ok: async ({ value: { to, data, value } }) => {
+          try {
+            const hash = await this.safeSuite.client
+              .extend(walletActions)
+              .sendTransaction({
+                account,
+                chain: null,
+                to,
+                data,
+                value: BigInt(value),
+              });
+
+            await this.safeSuite.client.waitForTransactionReceipt({ hash });
+
+            return { status: 'ok', value: undefined };
+          } catch (error) {
+            return { status: 'error', error };
+          }
+        },
+        error: ({ error }) => ({ status: 'error', error }),
+      }
+    );
   }
 
   private async ensureSingleOwnerSafe(

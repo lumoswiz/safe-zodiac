@@ -1,31 +1,37 @@
-import { Address, createPublicClient, Hex, http, PublicClient } from 'viem';
+import {
+  Address,
+  createPublicClient,
+  Hex,
+  http,
+  PublicClient,
+  encodeAbiParameters,
+  parseAbiParameters,
+  walletActions,
+} from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { ZodiacSafeSuite } from '../src/zodiac-safe';
+import { ExecutionOptions, ParameterType, Operator } from '../src/types';
 import {
-  ExecutionOptions,
-  ParameterType,
-  Operator,
-  MetaTransactionData,
-} from '../src/types';
-import { ROLE_KEY, SUPPLY_SELECTOR, TARGET, WETH } from '../test/src/constants';
-import { encodeAbiParameters, parseAbiParameters } from 'viem';
-import { expectValue, maybeError, unwrapOrFail } from '../src/lib/utils';
-import { encodeMulti } from '../src/lib/multisend';
+  account,
+  ROLE_KEY,
+  SUPPLY_SELECTOR,
+  TARGET,
+  WETH,
+} from '../test/src/constants';
+import { maybeError, unwrapOrFail } from '../src/lib/utils';
 
 (async () => {
   const FORK_URL = process.env.FORK_URL!;
-
   const publicClient = createPublicClient({
     chain: baseSepolia,
     transport: http(FORK_URL),
   });
 
-  const ROLE_MEMBER: Address = '0x4AAC49716981a089b28d59eDF32579ca96243727';
-
   const suite = new ZodiacSafeSuite(publicClient as PublicClient);
 
-  const safeAddress = '0x213B2Dbf21F105BfC21d7CA3F5cBe920Da9A816f';
-  const owner = '0x5DFA9B19235D93111D863b5F7e4508b32FDF915B';
+  const safeAddress: Address = '0x760c3b3dd615807deE12803091493f7E43A7613a';
+  const owner: Address = '0x5DFA9B19235D93111D863b5F7e4508b32FDF915B';
+  const ROLE_MEMBER: Address = '0x4AAC49716981a089b28d59eDF32579ca96243727';
   const safeNonce = 13n;
 
   const conditions = [
@@ -78,32 +84,55 @@ import { encodeMulti } from '../src/lib/multisend';
     ],
   };
 
-  const result = await suite.buildAllTx(
+  const buildResult = await suite.buildAllTx(
     safeAddress,
     owner,
     safeNonce,
     rolesSetup
   );
 
-  const value = unwrapOrFail(result);
-  if (maybeError(value)) throw value;
-  const { setupTxs, multisendTxs } = value;
+  const unwrapped = unwrapOrFail(buildResult);
+  if (maybeError(unwrapped)) throw unwrapped;
+  const { setupTxs, multisendTxs } = unwrapped;
 
-  const metaTxs: MetaTransactionData[] = multisendTxs.map((tx) => ({
-    to: tx.to,
-    value: tx.value,
-    data: tx.data,
-    operation: tx.operation,
-  }));
+  if (setupTxs.length > 0) {
+    console.log(`📦 Executing ${setupTxs.length} setup transaction(s)...`);
+    for (const tx of setupTxs) {
+      const hash = await publicClient.extend(walletActions).sendTransaction({
+        account,
+        to: tx.to,
+        data: tx.data,
+        value: BigInt(tx.value),
+      });
+      await publicClient.waitForTransactionReceipt({ hash });
+      console.log(`✅ Setup tx confirmed: ${hash}`);
+    }
+  }
 
-  const multisendBundleTx = encodeMulti(metaTxs);
+  if (multisendTxs.length > 0) {
+    const metaTxs = multisendTxs.map((tx) => ({
+      to: tx.to,
+      value: tx.value,
+      data: tx.data,
+      operation: tx.operation,
+    }));
 
-  console.log(multisendBundleTx);
+    const signed = await suite.signMultisendTx(safeAddress, metaTxs, account);
+    const signedTx = unwrapOrFail(signed);
+    if (maybeError(signedTx)) throw signedTx;
+
+    const { txData, signature } = signedTx;
+    const execRes = await suite.execTx(safeAddress, txData, signature, account);
+    const execOutcome = unwrapOrFail(execRes);
+    if (maybeError(execOutcome)) throw execOutcome;
+
+    console.log('✅ Multisend bundle executed successfully');
+  }
 
   console.log(
     JSON.stringify(
-      result,
-      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      { setupTxs, multisendTxs },
+      (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
       2
     )
   );
