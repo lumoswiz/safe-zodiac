@@ -151,6 +151,7 @@ export class ZodiacRolesSuite {
             functionName: 'assignRoles',
             args: [member, roleKeys, memberOf],
           }),
+          operation: 0,
         },
       };
     } catch (error) {
@@ -191,6 +192,7 @@ export class ZodiacRolesSuite {
             functionName: 'scopeTarget',
             args: [roleKey, target],
           }),
+          operation: 0,
         },
       };
     } catch (error) {
@@ -217,6 +219,7 @@ export class ZodiacRolesSuite {
             functionName: 'scopeFunction',
             args: [roleKey, target, selector, conditions, executionOpts],
           }),
+          operation: 0,
         },
       };
     } catch (error) {
