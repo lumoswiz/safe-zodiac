@@ -53,7 +53,9 @@ export class ZodiacSafeSuite {
     owner: Address,
     safeNonce: bigint,
     rolesSetup: PartialRolesSetupArgs = {},
-    rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE
+    rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
+    extraSetupTxs: MetaTransactionData[] = [],
+    extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
     if (!safe) {
       const predicted: Address = await expectValue(
@@ -71,7 +73,9 @@ export class ZodiacSafeSuite {
         safeNonce,
         rolesNonce,
         rolesSetup,
-        SetupStage.DeploySafe
+        SetupStage.DeploySafe,
+        extraSetupTxs,
+        extraMultisendTxs
       );
       return { status: 'ok', value: allBuckets };
     }
@@ -92,7 +96,9 @@ export class ZodiacSafeSuite {
         safeNonce,
         rolesNonce,
         rolesSetup,
-        SetupStage.DeployModule
+        SetupStage.DeployModule,
+        extraSetupTxs,
+        extraMultisendTxs
       );
       setupTxs.push(...extra.setupTxs);
       multisendTxs.push(...extra.multisendTxs);
@@ -114,7 +120,9 @@ export class ZodiacSafeSuite {
         safeNonce,
         rolesNonce,
         rolesSetup,
-        SetupStage.EnableModule
+        SetupStage.EnableModule,
+        extraSetupTxs,
+        extraMultisendTxs
       );
       setupTxs.push(...extra.setupTxs);
       multisendTxs.push(...extra.multisendTxs);
@@ -135,7 +143,9 @@ export class ZodiacSafeSuite {
         safeNonce,
         rolesNonce,
         rolesSetup,
-        SetupStage.AssignRoles
+        SetupStage.AssignRoles,
+        extraSetupTxs,
+        extraMultisendTxs
       );
       multisendTxs.push(...extra.multisendTxs);
       return { status: 'ok', value: { setupTxs, multisendTxs } };
@@ -395,7 +405,9 @@ export class ZodiacSafeSuite {
     safeNonce: bigint,
     rolesNonce: bigint,
     rolesSetup: PartialRolesSetupArgs = {},
-    startAt: SetupStage
+    startAt: SetupStage,
+    extraSetupTxs: MetaTransactionData[] = [],
+    extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<{
     setupTxs: MetaTransactionData[];
     multisendTxs: MetaTransactionData[];
@@ -471,6 +483,9 @@ export class ZodiacSafeSuite {
     for (let stage = startAt; stage <= SetupStage.ScopeFunctions; stage++) {
       await steps[stage]();
     }
+
+    setupTxs.push(...extraSetupTxs);
+    multisendTxs.push(...extraMultisendTxs);
 
     return { setupTxs, multisendTxs };
   }
