@@ -31,7 +31,8 @@ export function unwrapOrFail<R, E>(
 
 export const maybeError = <T>(
   val: T | { _isError: true }
-): val is { _isError: true } => (val as any)._isError;
+): val is { _isError: true } =>
+  !!val && typeof val === 'object' && '_isError' in val;
 
 export async function expectValue<T>(p: Promise<Result<T>>): Promise<T> {
   const r = await p;

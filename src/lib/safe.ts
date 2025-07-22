@@ -445,10 +445,11 @@ export class SafeContractSuite {
   async buildSignSafeTx(
     safe: Address,
     to: Address,
-    data: Hex
+    data: Hex,
+    operation: OperationType = OperationType.Call
   ): Promise<BuildSignSafeTx> {
     return match<SafeTransactionDataResult, BuildSignSafeTx>(
-      await this.buildSafeTransactionData(safe, to, data),
+      await this.buildSafeTransactionData(safe, to, data, operation),
       {
         ok: async ({ value: txData }) =>
           match(await this.getVersion(safe), {
