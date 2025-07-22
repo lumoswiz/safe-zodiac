@@ -32,7 +32,13 @@ import {
   IsModuleEnabledResult,
   SafeTransactionData,
 } from './types';
-import { expectValue, match, maybeError, unwrapOrFail } from './lib/utils';
+import {
+  expectValue,
+  isContractDeployed,
+  match,
+  maybeError,
+  unwrapOrFail,
+} from './lib/utils';
 import { generateSafeTypedData } from './lib/safe-eip712';
 import { encodeMulti } from './lib/multisend';
 
@@ -56,6 +62,21 @@ export class ZodiacSafeSuite {
     extraSetupTxs: MetaTransactionData[] = [],
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
+    const isDeployed = await isContractDeployed(this.safeSuite.client, safe);
+    if (!isDeployed) {
+      const allBuckets = await this.buildInitialSetupTxs(
+        safe,
+        owner,
+        safeNonce,
+        rolesNonce,
+        rolesSetup,
+        SetupStage.DeploySafe,
+        extraSetupTxs,
+        extraMultisendTxs
+      );
+      return { status: 'ok', value: allBuckets };
+    }
+
     const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
     const safeVal = unwrapOrFail(safeRes);
     if (maybeError(safeVal)) return { status: 'error', error: safeVal };
@@ -407,7 +428,10 @@ export class ZodiacSafeSuite {
       },
       [SetupStage.EnableModule]: async () => {
         multisendTxs.push(
-          await this.buildEnableModuleTx(safeAddress, rolesAddress)
+          await this.safeSuite.buildRawEnableModuleMetaTx(
+            safeAddress,
+            rolesAddress
+          )
         );
       },
       [SetupStage.AssignRoles]: async () => {
@@ -486,21 +510,6 @@ export class ZodiacSafeSuite {
         {
           built: ({ tx }) => ({ status: 'ok', value: tx }),
           skipped: () => ({ status: 'ok', value: null }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
-    );
-  }
-
-  private async buildEnableModuleTx(
-    safeAddr: Address,
-    moduleAddr: Address
-  ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildSignSafeTx, Result<MetaTransactionData>>(
-        await this.safeSuite.buildEnableModuleTx(safeAddr, moduleAddr),
-        {
-          ok: ({ value: { txData } }) => ({ status: 'ok', value: txData }),
           error: ({ error }) => ({ status: 'error', error }),
         }
       )
