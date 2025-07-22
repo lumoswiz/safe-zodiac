@@ -28,7 +28,6 @@ import {
   RoleScope,
   SetupStage,
   PartialRolesSetupArgs,
-  CalculateSafeAddressResult,
   EnsureModuleEnabledResult,
   IsModuleEnabledResult,
   SafeTransactionData,
@@ -49,7 +48,7 @@ export class ZodiacSafeSuite {
   }
 
   async buildAllTx(
-    safe: Address | undefined,
+    safe: Address,
     owner: Address,
     safeNonce: bigint,
     rolesSetup: PartialRolesSetupArgs = {},
@@ -57,29 +56,6 @@ export class ZodiacSafeSuite {
     extraSetupTxs: MetaTransactionData[] = [],
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
-    if (!safe) {
-      const predicted: Address = await expectValue(
-        this.safeSuite.calculateSafeAddress([owner], safeNonce).then((res) =>
-          match<CalculateSafeAddressResult, Result<Address>>(res, {
-            ok: ({ value }) => ({ status: 'ok', value }),
-            error: ({ error }) => ({ status: 'error', error }),
-          })
-        )
-      );
-
-      const allBuckets = await this.buildInitialSetupTxs(
-        predicted,
-        owner,
-        safeNonce,
-        rolesNonce,
-        rolesSetup,
-        SetupStage.DeploySafe,
-        extraSetupTxs,
-        extraMultisendTxs
-      );
-      return { status: 'ok', value: allBuckets };
-    }
-
     const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
     const safeVal = unwrapOrFail(safeRes);
     if (maybeError(safeVal)) return { status: 'error', error: safeVal };
@@ -89,19 +65,24 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [...safeTxs];
     const multisendTxs: MetaTransactionData[] = [];
 
-    if (safeTxs.length > 0) {
-      const extra = await this.buildInitialSetupTxs(
-        safeAddress,
-        owner,
-        safeNonce,
-        rolesNonce,
-        rolesSetup,
-        SetupStage.DeployModule,
-        extraSetupTxs,
-        extraMultisendTxs
-      );
-      setupTxs.push(...extra.setupTxs);
-      multisendTxs.push(...extra.multisendTxs);
+    const startStage =
+      safeTxs.length > 0 ? SetupStage.DeploySafe : SetupStage.DeployModule;
+
+    const extra = await this.buildInitialSetupTxs(
+      safeAddress,
+      owner,
+      safeNonce,
+      rolesNonce,
+      rolesSetup,
+      startStage,
+      extraSetupTxs,
+      extraMultisendTxs
+    );
+
+    setupTxs.push(...extra.setupTxs);
+    multisendTxs.push(...extra.multisendTxs);
+
+    if (startStage === SetupStage.DeploySafe) {
       return { status: 'ok', value: { setupTxs, multisendTxs } };
     }
 
@@ -110,7 +91,6 @@ export class ZodiacSafeSuite {
     if (maybeError(rolesVal)) return { status: 'error', error: rolesVal };
 
     const { rolesAddress, metaTxs: rolesTxs } = rolesVal;
-
     setupTxs.push(...rolesTxs);
 
     if (rolesTxs.length > 0) {
@@ -151,7 +131,6 @@ export class ZodiacSafeSuite {
       return { status: 'ok', value: { setupTxs, multisendTxs } };
     }
 
-    // Add to here later
     return { status: 'ok', value: { setupTxs, multisendTxs } };
   }
 
@@ -270,21 +249,12 @@ export class ZodiacSafeSuite {
   }
 
   private async ensureSingleOwnerSafe(
-    safe: Address | undefined,
+    safe: Address,
     owner: Address,
     safeNonce: bigint
   ): Promise<EnsureSafeResult> {
-    const resolved =
-      safe ??
-      unwrapOrFail(
-        await this.safeSuite.calculateSafeAddress([owner], safeNonce)
-      );
-    if (maybeError(resolved)) {
-      return { status: 'error', error: resolved };
-    }
-
     const validityRes = await match<IsValidSafeResult, Result<boolean>>(
-      await this.isValidSafe(resolved, owner),
+      await this.isValidSafe(safe, owner),
       {
         ok: ({ value }) => ({ status: 'ok', value }),
         error: ({ error }) => {
@@ -324,10 +294,10 @@ export class ZodiacSafeSuite {
       }
 
       const metaTxs = errOrTx ? [errOrTx as MetaTransactionData] : [];
-      return { status: 'ok', value: { safeAddress: resolved, metaTxs } };
+      return { status: 'ok', value: { safeAddress: safe, metaTxs } };
     }
 
-    return { status: 'ok', value: { safeAddress: resolved, metaTxs: [] } };
+    return { status: 'ok', value: { safeAddress: safe, metaTxs: [] } };
   }
 
   private async isValidSafe(
