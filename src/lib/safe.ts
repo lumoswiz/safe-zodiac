@@ -41,6 +41,7 @@ import {
   OperationType,
   SafeTransactionDataResult,
   BuildSignSafeTx,
+  MetaTransactionData,
 } from '../types';
 import { isContractDeployed, match } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
@@ -277,6 +278,22 @@ export class SafeContractSuite {
     } catch (error) {
       return { status: 'error', error };
     }
+  }
+
+  async buildRawEnableModuleMetaTx(
+    safe: Address,
+    module: Address
+  ): Promise<MetaTransactionData> {
+    return {
+      to: safe,
+      value: '0x0',
+      data: encodeFunctionData({
+        abi: SAFE_PROXY_ABI,
+        functionName: 'enableModule',
+        args: [module],
+      }),
+      operation: 0,
+    };
   }
 
   async buildEnableModuleTx(
