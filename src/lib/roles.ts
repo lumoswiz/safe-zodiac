@@ -140,21 +140,19 @@ export class ZodiacRolesSuite {
     memberOf: boolean[]
   ): Promise<BuildMetaTxResult> {
     try {
-      return {
-        status: 'ok',
-        value: {
-          to: module,
-          value: '0x00',
-          data: encodeFunctionData({
-            abi: ROLES_V2_MODULE_ABI,
-            functionName: 'assignRoles',
-            args: [member, roleKeys, memberOf],
-          }),
-          operation: 0,
-        },
-      };
+      const data = encodeFunctionData({
+        abi: ROLES_V2_MODULE_ABI,
+        functionName: 'assignRoles',
+        args: [member, roleKeys, memberOf],
+      });
+      return makeOk({
+        to: module,
+        value: '0x00',
+        data,
+        operation: 0,
+      });
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
