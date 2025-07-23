@@ -25,7 +25,13 @@ import type {
   ConditionFlat,
   ExecutionOptions,
 } from '../types';
-import { isContractDeployed, makeError, makeOk, matchResult } from './utils';
+import {
+  isContractDeployed,
+  makeError,
+  makeOk,
+  matchResult,
+  toMetaTx,
+} from './utils';
 
 export class ZodiacRolesSuite {
   client: PublicClient;
@@ -140,17 +146,16 @@ export class ZodiacRolesSuite {
     memberOf: boolean[]
   ): Promise<BuildMetaTxResult> {
     try {
-      const data = encodeFunctionData({
-        abi: ROLES_V2_MODULE_ABI,
-        functionName: 'assignRoles',
-        args: [member, roleKeys, memberOf],
-      });
-      return makeOk({
-        to: module,
-        value: '0x00',
-        data,
-        operation: 0,
-      });
+      return makeOk(
+        toMetaTx({
+          to: module,
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'assignRoles',
+            args: [member, roleKeys, memberOf],
+          }),
+        })
+      );
     } catch (error) {
       return makeError(error);
     }
@@ -179,17 +184,16 @@ export class ZodiacRolesSuite {
     target: Address
   ): Promise<BuildMetaTxResult> {
     try {
-      const data = encodeFunctionData({
-        abi: ROLES_V2_MODULE_ABI,
-        functionName: 'scopeTarget',
-        args: [roleKey, target],
-      });
-      return makeOk({
-        to: module,
-        value: '0x00',
-        data,
-        operation: 0,
-      });
+      return makeOk(
+        toMetaTx({
+          to: module,
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'scopeTarget',
+            args: [roleKey, target],
+          }),
+        })
+      );
     } catch (error) {
       return makeError(error);
     }
@@ -204,17 +208,17 @@ export class ZodiacRolesSuite {
     executionOpts: ExecutionOptions
   ): Promise<BuildMetaTxResult> {
     try {
-      const data = encodeFunctionData({
-        abi: ROLES_V2_MODULE_ABI,
-        functionName: 'scopeFunction',
-        args: [roleKey, target, selector, conditions, executionOpts],
-      });
-      return makeOk({
-        to: module,
-        value: '0x00',
-        data,
-        operation: 0,
-      });
+      return makeOk(
+        toMetaTx({
+          to: module,
+          data: encodeFunctionData({
+            abi: ROLES_V2_MODULE_ABI,
+            functionName: 'scopeFunction',
+            args: [roleKey, target, selector, conditions, executionOpts],
+          }),
+          operation: 0,
+        })
+      );
     } catch (error) {
       return makeError(error);
     }
