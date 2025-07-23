@@ -1,6 +1,6 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { deployAndSetupRoles, signAndExec, unwrap } from '../utils';
+import { deployAndSetupRoles, signAndExec, expectOk } from '../utils';
 import {
   Address,
   createPublicClient,
@@ -41,12 +41,14 @@ describe('Scope Target', () => {
   });
 
   test('Scope role to member (via Safe)', async () => {
-    const { to, data } = unwrap(
-      await rolesSuite.buildScopeTargetTx(ROLES_ADDRESS, ROLE_KEY, TARGET)
+    const { to, data } = expectOk(
+      await rolesSuite.buildScopeTargetTx(ROLES_ADDRESS, ROLE_KEY, TARGET),
+      'Failed to build scopeTarget tx'
     );
 
-    const { txData } = unwrap(
-      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data)
+    const { txData } = expectOk(
+      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data),
+      'Failed to wrap scopeTarget in Safe tx'
     );
 
     await signAndExec(safeSuite, SAFE_ADDRESS, txData, account);
