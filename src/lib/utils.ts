@@ -1,5 +1,5 @@
-import { type PublicClient, type Address } from 'viem';
-import { Result } from '../types';
+import { type PublicClient, type Address, Hex } from 'viem';
+import { MetaTransactionData, OperationType, Result } from '../types';
 
 export async function isContractDeployed(
   client: PublicClient,
@@ -7,6 +7,19 @@ export async function isContractDeployed(
 ): Promise<boolean> {
   const code = await client.getCode({ address });
   return !!(code && code !== '0x');
+}
+
+export function toMetaTx(tx: {
+  to: Address;
+  data: Hex;
+  operation?: OperationType;
+}): MetaTransactionData {
+  return {
+    to: tx.to,
+    data: tx.data,
+    value: '0x00',
+    operation: tx.operation ?? OperationType.Call,
+  };
 }
 
 export async function match<
@@ -19,7 +32,7 @@ export async function match<
 ): Promise<R> {
   const handler = handlers[value.status as K];
   if (!handler) throw new Error(`Unhandled case: ${value.status}`);
-  return await handler(value as any);
+  return await handler(value as Extract<T, { status: K }>);
 }
 
 export function unwrapOrFail<R, E>(
@@ -39,4 +52,29 @@ export async function expectValue<T>(p: Promise<Result<T>>): Promise<T> {
   const v = unwrapOrFail(r);
   if (maybeError(v)) throw v;
   return v;
+}
+
+export function makeOk<T>(value: T): Result<T> {
+  return { status: 'ok', value };
+}
+
+export function makeError<T = unknown>(error: T): Result<never, T> {
+  return { status: 'error', error };
+}
+
+export async function matchResult<
+  T extends { status: 'ok'; value: any } | { status: 'error'; error: any },
+  R
+>(
+  result: T,
+  handlers: {
+    ok: (value: Extract<T, { status: 'ok' }>) => R | Promise<R>;
+    error: (error: Extract<T, { status: 'error' }>) => R | Promise<R>;
+  }
+): Promise<R> {
+  if (result.status === 'ok') {
+    return handlers.ok(result as any);
+  } else {
+    return handlers.error(result as any);
+  }
 }
