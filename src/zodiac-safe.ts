@@ -325,29 +325,33 @@ export class ZodiacSafeSuite {
     signature: Hex,
     account: Account
   ): Promise<Result<Hex>> {
-    return match(
-      await this.safeSuite.buildExecTransaction(safe, txData, signature),
-      {
-        ok: async ({ value: { to, data, value } }) => {
-          try {
-            const client = this.safeSuite.client.extend(walletActions);
-            const hash = await client.sendTransaction({
-              account,
-              chain: null,
-              to,
-              data,
-              value: BigInt(value),
-            });
-
-            await client.waitForTransactionReceipt({ hash });
-            return { status: 'ok', value: hash };
-          } catch (error) {
-            return { status: 'error', error };
-          }
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
+    const execResult = await this.safeSuite.buildExecTransaction(
+      safe,
+      txData,
+      signature
     );
+
+    return matchResult(execResult, {
+      error: ({ error }) => makeError(error),
+
+      ok: async ({ value: { to, data, value } }) => {
+        try {
+          const client = this.safeSuite.client.extend(walletActions);
+          const hash = await client.sendTransaction({
+            account,
+            chain: null,
+            to,
+            data,
+            value: BigInt(value),
+          });
+
+          await client.waitForTransactionReceipt({ hash });
+          return makeOk(hash);
+        } catch (error) {
+          return makeError(error);
+        }
+      },
+    });
   }
 
   private async ensureSingleOwnerSafe(
