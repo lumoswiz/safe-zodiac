@@ -406,22 +406,18 @@ export class ZodiacSafeSuite {
     safe: Address,
     owner: Address
   ): Promise<IsValidSafeResult> {
-    return match<GetOwnersResult, IsValidSafeResult>(
-      await this.safeSuite.getOwners(safe),
-      {
-        ok: ({ value: owners }) => {
-          const [onlyOwner] = owners;
-          if (!onlyOwner || owners.length !== 1) {
-            return { status: 'ok', value: false };
-          }
-          return {
-            status: 'ok',
-            value: isAddressEqual(owner, onlyOwner),
-          };
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const ownersResult = await this.safeSuite.getOwners(safe);
+
+    return matchResult(ownersResult, {
+      ok: ({ value: owners }) => {
+        const [onlyOwner] = owners;
+        if (!onlyOwner || owners.length !== 1) {
+          return makeOk(false);
+        }
+        return makeOk(isAddressEqual(owner, onlyOwner));
+      },
+      error: ({ error }) => makeError(error),
+    });
   }
 
   private async ensureRolesModule(
