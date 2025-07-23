@@ -1,13 +1,12 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { deploySafeWithRoles, signAndExec } from '../utils';
+import { deploySafeWithRoles, signAndExec, expectOk } from '../utils';
 import { Address, createPublicClient, PublicClient, http } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
 import { ZodiacRolesSuite } from '../../src/lib/roles';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, ROLE_KEY, ROLE_MEMBER } from '../src/constants';
-import { match } from '../../src/lib/utils';
 
 describe('Assign Roles', () => {
   let SAFE_ADDRESS: Address;
@@ -31,37 +30,28 @@ describe('Assign Roles', () => {
   });
 
   test('Assign role to member (via Safe)', async () => {
-    await match(
+    const rolesTx = expectOk(
       await rolesSuite.buildAssignRolesTx(
         ROLES_ADDRESS,
         ROLE_MEMBER,
         [ROLE_KEY],
         [true]
       ),
-      {
-        error: ({ error }) => {
-          throw new Error(`Could not build Roles tx: ${error}`);
-        },
-        ok: async ({ value: { to, data } }) => {
-          await match(await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data), {
-            error: ({ error }) => {
-              throw new Error(`Could not wrap in Safe tx: ${error}`);
-            },
-            ok: async ({ value: { txData } }) => {
-              await signAndExec(safeSuite, SAFE_ADDRESS, txData, account);
-            },
-          });
-        },
-      }
+      'Could not build Roles tx'
     );
 
-    await match(await rolesSuite.isModuleEnabled(ROLES_ADDRESS, ROLE_MEMBER), {
-      error: ({ error }) => {
-        throw new Error(`isModuleEnabled failed: ${error}`);
-      },
-      ok: ({ value }) => {
-        expect(value).toBe(true);
-      },
-    });
+    const safeTx = expectOk(
+      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, rolesTx.to, rolesTx.data),
+      'Could not wrap in Safe tx'
+    );
+
+    await signAndExec(safeSuite, SAFE_ADDRESS, safeTx.txData, account);
+
+    const isAssigned = expectOk(
+      await rolesSuite.isModuleEnabled(ROLES_ADDRESS, ROLE_MEMBER),
+      'isModuleEnabled failed'
+    );
+
+    expect(isAssigned).toBe(true);
   });
 });
