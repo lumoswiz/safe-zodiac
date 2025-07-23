@@ -477,7 +477,7 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const addrResult = await this.rolesSuite.calculateModuleProxyAddress(
+    const addrResult = this.rolesSuite.calculateModuleProxyAddress(
       safeAddress,
       rolesNonce
     );
