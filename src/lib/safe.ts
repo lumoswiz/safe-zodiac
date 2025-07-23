@@ -43,13 +43,7 @@ import {
   BuildSignSafeTx,
   MetaTransactionData,
 } from '../types';
-import {
-  isContractDeployed,
-  makeError,
-  makeOk,
-  match,
-  matchResult,
-} from './utils';
+import { isContractDeployed, makeError, makeOk, matchResult } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
@@ -468,33 +462,39 @@ export class SafeContractSuite {
     data: Hex,
     operation: OperationType = OperationType.Call
   ): Promise<BuildSignSafeTx> {
-    return match<SafeTransactionDataResult, BuildSignSafeTx>(
-      await this.buildSafeTransactionData(safe, to, data, operation),
-      {
-        ok: async ({ value: txData }) =>
-          match(await this.getVersion(safe), {
-            ok: async ({ value: version }) => {
-              const chainId = await this.client.getChainId();
-              return match<GetSafeTxHashResult, BuildSignSafeTx>(
-                await this.getSafeTransactionHash(
-                  safe,
-                  txData,
-                  version,
-                  chainId
-                ),
-                {
-                  ok: ({ value: safeTxHash }) => ({
-                    status: 'ok',
-                    value: { txData, safeTxHash },
-                  }),
-                  error: ({ error }) => ({ status: 'error', error }),
-                }
-              );
-            },
-            error: ({ error }) => ({ status: 'error', error }),
-          }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
+    const txResult = await this.buildSafeTransactionData(
+      safe,
+      to,
+      data,
+      operation
     );
+
+    return matchResult(txResult, {
+      error: ({ error }) => makeError(error),
+
+      ok: async ({ value: txData }) => {
+        const versionResult = await this.getVersion(safe);
+
+        return matchResult(versionResult, {
+          error: ({ error }) => makeError(error),
+
+          ok: async ({ value: version }) => {
+            const chainId = await this.client.getChainId();
+
+            const hashResult = await this.getSafeTransactionHash(
+              safe,
+              txData,
+              version,
+              chainId
+            );
+
+            return matchResult(hashResult, {
+              ok: ({ value: safeTxHash }) => makeOk({ txData, safeTxHash }),
+              error: ({ error }) => makeError(error),
+            });
+          },
+        });
+      },
+    });
   }
 }
