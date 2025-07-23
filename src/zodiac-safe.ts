@@ -11,33 +11,28 @@ import {
 import { SafeContractSuite } from './lib/safe';
 import { ZodiacRolesSuite } from './lib/roles';
 import {
-  GetOwnersResult,
   IsValidSafeResult,
   MetaTransactionData,
   Result,
   EnsureSafeResult,
   BuildTxResult,
   EnsureRolesResult,
-  IsModuleDeployedResult,
-  CalculateModuleProxyAddressResult,
   BuildTxBucketsResult,
   ExecutionOptions,
   RolesSetupArgs,
-  BuildSignSafeTx,
-  BuildMetaTxResult,
   RoleScope,
   SetupStage,
   PartialRolesSetupArgs,
   EnsureModuleEnabledResult,
-  IsModuleEnabledResult,
   SafeTransactionData,
 } from './types';
 import {
   expectValue,
   isContractDeployed,
+  makeError,
+  makeOk,
   match,
-  maybeError,
-  unwrapOrFail,
+  matchResult,
 } from './lib/utils';
 import { generateSafeTypedData } from './lib/safe-eip712';
 import { encodeMulti } from './lib/multisend';
@@ -65,52 +60,71 @@ export class ZodiacSafeSuite {
   ): Promise<Result<Hex[]>> {
     const client = this.safeSuite.client.extend(walletActions);
 
-    const buildResult = await this.buildAllTx(
-      safe,
-      owner,
-      safeNonce,
-      rolesSetup,
-      rolesNonce,
-      extraSetupTxs,
-      extraMultisendTxs
-    );
-    const unwrapped = unwrapOrFail(buildResult);
-    if (maybeError(unwrapped)) return { status: 'error', error: unwrapped };
-    const { setupTxs, multisendTxs } = unwrapped;
-
-    const txHashes: Hex[] = [];
-
-    for (const tx of setupTxs) {
-      const hash = await client.sendTransaction({
-        account,
-        chain: null,
-        to: tx.to,
-        data: tx.data,
-        value: BigInt(tx.value),
-      });
-      await client.waitForTransactionReceipt({ hash });
-      txHashes.push(hash);
-    }
-
-    if (multisendTxs.length > 0) {
-      const signed = unwrapOrFail(
-        await this.signMultisendTx(safe, multisendTxs, account)
-      );
-      if (maybeError(signed)) return { status: 'error', error: signed };
-
-      const exec = await this.execTx(
+    return matchResult(
+      await this.buildAllTx(
         safe,
-        signed.txData,
-        signed.signature,
-        account
-      );
-      const hash = unwrapOrFail(exec);
-      if (maybeError(hash)) return { status: 'error', error: hash };
+        owner,
+        safeNonce,
+        rolesSetup,
+        rolesNonce,
+        extraSetupTxs,
+        extraMultisendTxs
+      ),
+      {
+        error: (err) => makeError(err.error),
 
-      txHashes.push(hash);
-    }
+        ok: async ({ value: { setupTxs, multisendTxs } }) => {
+          const txHashes: Hex[] = [];
 
-    return { status: 'ok', value: txHashes };
+          try {
+            for (const tx of setupTxs) {
+              const hash = await client.sendTransaction({
+                account,
+                chain: null,
+                to: tx.to,
+                data: tx.data,
+                value: BigInt(tx.value),
+              });
+              await client.waitForTransactionReceipt({ hash });
+              txHashes.push(hash);
+            }
+
+            if (multisendTxs.length > 0) {
+              const signedResult = await this.signMultisendTx(
+                safe,
+                multisendTxs,
+                account
+              );
+
+              return matchResult(signedResult, {
+                error: (err) => makeError(err.error),
+
+                ok: async ({ value: { txData, signature } }) => {
+                  const execResult = await this.execTx(
+                    safe,
+                    txData,
+                    signature,
+                    account
+                  );
+
+                  return matchResult(execResult, {
+                    error: (err) => makeError(err.error),
+                    ok: ({ value: hash }) => {
+                      txHashes.push(hash);
+                      return makeOk(txHashes);
+                    },
+                  });
+                },
+              });
+            }
+
+            return makeOk(txHashes);
+          } catch (err) {
+            return makeError(err);
+          }
+        },
+      }
+    );
   }
 
   async buildAllTx(
@@ -123,6 +137,7 @@ export class ZodiacSafeSuite {
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
     const isDeployed = await isContractDeployed(this.safeSuite.client, safe);
+
     if (!isDeployed) {
       const allBuckets = await this.buildInitialSetupTxs(
         safe,
@@ -134,14 +149,14 @@ export class ZodiacSafeSuite {
         extraSetupTxs,
         extraMultisendTxs
       );
-      return { status: 'ok', value: allBuckets };
+      return makeOk(allBuckets);
     }
 
     const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
-    const safeVal = unwrapOrFail(safeRes);
-    if (maybeError(safeVal)) return { status: 'error', error: safeVal };
-
-    const { safeAddress, metaTxs: safeTxs } = safeVal;
+    const { safeAddress, metaTxs: safeTxs } = await matchResult(safeRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     const setupTxs: MetaTransactionData[] = [...safeTxs];
     const multisendTxs: MetaTransactionData[] = [];
@@ -164,14 +179,15 @@ export class ZodiacSafeSuite {
     multisendTxs.push(...extra.multisendTxs);
 
     if (startStage === SetupStage.DeploySafe) {
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
     const rolesRes = await this.ensureRolesModule(safeAddress, rolesNonce);
-    const rolesVal = unwrapOrFail(rolesRes);
-    if (maybeError(rolesVal)) return { status: 'error', error: rolesVal };
+    const { rolesAddress, metaTxs: rolesTxs } = await matchResult(rolesRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
-    const { rolesAddress, metaTxs: rolesTxs } = rolesVal;
     setupTxs.push(...rolesTxs);
 
     if (rolesTxs.length > 0) {
@@ -187,12 +203,14 @@ export class ZodiacSafeSuite {
       );
       setupTxs.push(...extra.setupTxs);
       multisendTxs.push(...extra.multisendTxs);
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
     const enableRes = await this.ensureModuleEnabled(safeAddress, rolesAddress);
-    const enableVal = unwrapOrFail(enableRes);
-    if (maybeError(enableVal)) return { status: 'error', error: enableVal };
+    const enableVal = await matchResult(enableRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     const enableTxs = enableVal.metaTxs;
     multisendTxs.push(...enableTxs);
@@ -209,10 +227,10 @@ export class ZodiacSafeSuite {
         extraMultisendTxs
       );
       multisendTxs.push(...extra.multisendTxs);
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
-    return { status: 'ok', value: { setupTxs, multisendTxs } };
+    return makeOk({ setupTxs, multisendTxs });
   }
 
   async signTx(
@@ -241,12 +259,11 @@ export class ZodiacSafeSuite {
           message: typedData.message,
         });
 
-      return { status: 'ok', value: signature };
+      return makeOk(signature);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
-
   async signMultisendTx(
     safe: Address,
     multisendTxs: MetaTransactionData[],
@@ -254,46 +271,44 @@ export class ZodiacSafeSuite {
   ): Promise<Result<{ txData: SafeTransactionData; signature: Hex }>> {
     const multisendTx = encodeMulti(multisendTxs);
 
-    return match(
-      await this.safeSuite.buildSignSafeTx(
-        safe,
-        multisendTx.to,
-        multisendTx.data,
-        multisendTx.operation
-      ),
-      {
-        ok: async ({ value: { txData } }) => {
-          try {
-            const version = await this.safeSuite
-              .getVersion(safe)
-              .then(unwrapOrFail);
-            const chainId = await this.safeSuite.client.getChainId();
+    const signResult = await this.safeSuite.buildSignSafeTx(
+      safe,
+      multisendTx.to,
+      multisendTx.data,
+      multisendTx.operation
+    );
 
-            const typedData = generateSafeTypedData({
-              safeAddress: safe,
-              safeVersion: version,
-              chainId,
-              data: txData,
+    return matchResult(signResult, {
+      error: ({ error }) => makeError(error),
+
+      ok: async ({ value: { txData } }) => {
+        try {
+          const version = await expectValue(this.safeSuite.getVersion(safe));
+          const chainId = await this.safeSuite.client.getChainId();
+
+          const typedData = generateSafeTypedData({
+            safeAddress: safe,
+            safeVersion: version,
+            chainId,
+            data: txData,
+          });
+
+          const signature = await this.safeSuite.client
+            .extend(walletActions)
+            .signTypedData({
+              account,
+              domain: typedData.domain,
+              types: typedData.types,
+              primaryType: typedData.primaryType,
+              message: typedData.message,
             });
 
-            const signature = await this.safeSuite.client
-              .extend(walletActions)
-              .signTypedData({
-                account,
-                domain: typedData.domain,
-                types: typedData.types,
-                primaryType: typedData.primaryType,
-                message: typedData.message,
-              });
-
-            return { status: 'ok', value: { txData, signature } };
-          } catch (error) {
-            return { status: 'error', error };
-          }
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+          return makeOk({ txData, signature });
+        } catch (error) {
+          return makeError(error);
+        }
+      },
+    });
   }
 
   async execTx(
@@ -302,29 +317,33 @@ export class ZodiacSafeSuite {
     signature: Hex,
     account: Account
   ): Promise<Result<Hex>> {
-    return match(
-      await this.safeSuite.buildExecTransaction(safe, txData, signature),
-      {
-        ok: async ({ value: { to, data, value } }) => {
-          try {
-            const client = this.safeSuite.client.extend(walletActions);
-            const hash = await client.sendTransaction({
-              account,
-              chain: null,
-              to,
-              data,
-              value: BigInt(value),
-            });
-
-            await client.waitForTransactionReceipt({ hash });
-            return { status: 'ok', value: hash };
-          } catch (error) {
-            return { status: 'error', error };
-          }
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
+    const execResult = await this.safeSuite.buildExecTransaction(
+      safe,
+      txData,
+      signature
     );
+
+    return matchResult(execResult, {
+      error: ({ error }) => makeError(error),
+
+      ok: async ({ value: { to, data, value } }) => {
+        try {
+          const client = this.safeSuite.client.extend(walletActions);
+          const hash = await client.sendTransaction({
+            account,
+            chain: null,
+            to,
+            data,
+            value: BigInt(value),
+          });
+
+          await client.waitForTransactionReceipt({ hash });
+          return makeOk(hash);
+        } catch (error) {
+          return makeError(error);
+        }
+      },
+    });
   }
 
   private async ensureSingleOwnerSafe(
@@ -332,26 +351,20 @@ export class ZodiacSafeSuite {
     owner: Address,
     safeNonce: bigint
   ): Promise<EnsureSafeResult> {
-    const validityRes = await match<IsValidSafeResult, Result<boolean>>(
-      await this.isValidSafe(safe, owner),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => {
-          if (
-            error instanceof ContractFunctionRevertedError ||
-            error instanceof ContractFunctionExecutionError
-          ) {
-            return { status: 'ok', value: false };
-          }
-          return { status: 'error', error };
-        },
-      }
-    );
+    const isValidResult = await this.isValidSafe(safe, owner);
 
-    const isValid = unwrapOrFail(validityRes);
-    if (maybeError(isValid)) {
-      return { status: 'error', error: isValid };
-    }
+    const isValid = await matchResult(isValidResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => {
+        if (
+          error instanceof ContractFunctionRevertedError ||
+          error instanceof ContractFunctionExecutionError
+        ) {
+          return false;
+        }
+        return Promise.reject(error);
+      },
+    });
 
     if (!isValid) {
       const deployRes = await this.safeSuite.buildSafeDeploymentTx(
@@ -359,93 +372,93 @@ export class ZodiacSafeSuite {
         safeNonce
       );
 
-      const errOrTx = await match<
+      const buildRes = await match<
         BuildTxResult,
-        null | MetaTransactionData | unknown
+        Result<MetaTransactionData | null>
       >(deployRes, {
-        built: ({ tx }) => tx,
-        skipped: () => null,
-        error: ({ error }) => error,
+        built: ({ tx }) => makeOk(tx),
+        skipped: () => makeOk(null),
+        error: ({ error }) => makeError(error),
       });
 
-      if (errOrTx && typeof errOrTx !== 'object') {
-        return { status: 'error', error: errOrTx };
-      }
-
-      const metaTxs = errOrTx ? [errOrTx as MetaTransactionData] : [];
-      return { status: 'ok', value: { safeAddress: safe, metaTxs } };
+      return matchResult(buildRes, {
+        ok: ({ value }) =>
+          makeOk({
+            safeAddress: safe,
+            metaTxs: value ? [value] : [],
+          }),
+        error: ({ error }) => makeError(error),
+      });
     }
 
-    return { status: 'ok', value: { safeAddress: safe, metaTxs: [] } };
+    return makeOk({ safeAddress: safe, metaTxs: [] });
   }
 
   private async isValidSafe(
     safe: Address,
     owner: Address
   ): Promise<IsValidSafeResult> {
-    return match<GetOwnersResult, IsValidSafeResult>(
-      await this.safeSuite.getOwners(safe),
-      {
-        ok: ({ value: owners }) => {
-          const [onlyOwner] = owners;
-          if (!onlyOwner || owners.length !== 1) {
-            return { status: 'ok', value: false };
-          }
-          return {
-            status: 'ok',
-            value: isAddressEqual(owner, onlyOwner),
-          };
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const ownersResult = await this.safeSuite.getOwners(safe);
+
+    return matchResult(ownersResult, {
+      ok: ({ value: owners }) => {
+        const [onlyOwner] = owners;
+        if (!onlyOwner || owners.length !== 1) {
+          return makeOk(false);
+        }
+        return makeOk(isAddressEqual(owner, onlyOwner));
+      },
+      error: ({ error }) => makeError(error),
+    });
   }
 
   private async ensureRolesModule(
     safe: Address,
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE
   ): Promise<EnsureRolesResult> {
-    const addrRes = await match<
-      CalculateModuleProxyAddressResult,
-      Result<Address>
-    >(this.rolesSuite.calculateModuleProxyAddress(safe, rolesNonce), {
-      ok: ({ value }) => ({ status: 'ok', value }),
-      error: ({ error }) => ({ status: 'error', error }),
-    });
-
-    const rolesAddress = unwrapOrFail(addrRes);
-    if (maybeError(rolesAddress))
-      return { status: 'error', error: rolesAddress };
-
-    const deployedRes = await match<IsModuleDeployedResult, Result<boolean>>(
-      await this.rolesSuite.isModuleDeployed(safe, rolesNonce),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
+    const addrResult = this.rolesSuite.calculateModuleProxyAddress(
+      safe,
+      rolesNonce
     );
 
-    const isDeployed = unwrapOrFail(deployedRes);
-    if (maybeError(isDeployed)) return { status: 'error', error: isDeployed };
-
-    if (isDeployed) {
-      return { status: 'ok', value: { rolesAddress, metaTxs: [] } };
-    }
-
-    const buildRes = await match<
-      BuildTxResult,
-      Result<MetaTransactionData | null>
-    >(await this.rolesSuite.buildDeployModuleTx(safe, rolesNonce), {
-      built: ({ tx }) => ({ status: 'ok', value: tx }),
-      skipped: () => ({ status: 'ok', value: null }),
-      error: ({ error }) => ({ status: 'error', error }),
+    const rolesAddress = await matchResult(addrResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
     });
 
-    const txOrNull = unwrapOrFail(buildRes);
-    if (maybeError(txOrNull)) return { status: 'error', error: txOrNull };
+    const deployedResult = await this.rolesSuite.isModuleDeployed(
+      safe,
+      rolesNonce
+    );
 
-    const metaTxs = txOrNull ? [txOrNull] : [];
-    return { status: 'ok', value: { rolesAddress, metaTxs } };
+    const isDeployed = await matchResult(deployedResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
+
+    if (isDeployed) {
+      return makeOk({ rolesAddress, metaTxs: [] });
+    }
+
+    const buildRes = await this.rolesSuite.buildDeployModuleTx(
+      safe,
+      rolesNonce
+    );
+
+    const deployResult = await match<
+      BuildTxResult,
+      Result<MetaTransactionData | null>
+    >(buildRes, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeOk(null),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(deployResult, {
+      ok: ({ value }) =>
+        makeOk({ rolesAddress, metaTxs: value ? [value] : [] }),
+      error: ({ error }) => makeError(error),
+    });
   }
 
   private async buildInitialSetupTxs(
@@ -464,15 +477,15 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const rolesAddress = await expectValue(
-      match<CalculateModuleProxyAddressResult, Result<Address>>(
-        this.rolesSuite.calculateModuleProxyAddress(safeAddress, rolesNonce),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const addrResult = await this.rolesSuite.calculateModuleProxyAddress(
+      safeAddress,
+      rolesNonce
     );
+
+    const rolesAddress = await matchResult(addrResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     type StepFn = () => Promise<void>;
 
@@ -546,71 +559,72 @@ export class ZodiacSafeSuite {
     owner: Address,
     nonce: bigint
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildTxResult, Result<MetaTransactionData>>(
-        await this.safeSuite.buildSafeDeploymentTx(owner, nonce),
-        {
-          built: ({ tx }) => ({ status: 'ok', value: tx }),
-          skipped: () => ({ status: 'error', error: 'unexpected skip' }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
-    );
+    const result = await this.safeSuite.buildSafeDeploymentTx(owner, nonce);
+
+    const tx = await match(result, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeError('unexpected skip'),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(tx, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildRolesDeployTx(
     safeAddr: Address,
     nonce: bigint
   ): Promise<MetaTransactionData | null> {
-    return expectValue(
-      match<BuildTxResult, Result<MetaTransactionData | null>>(
-        await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce),
-        {
-          built: ({ tx }) => ({ status: 'ok', value: tx }),
-          skipped: () => ({ status: 'ok', value: null }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
-    );
+    const result = await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce);
+
+    const tx: Result<MetaTransactionData | null> = await match<
+      BuildTxResult,
+      Result<MetaTransactionData | null>
+    >(result, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeOk(null),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(tx, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildAssignRolesTx(
     moduleAddr: Address,
     setup: RolesSetupArgs
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildAssignRolesTx(
-          moduleAddr,
-          setup.member,
-          [setup.roleKey],
-          [true]
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildAssignRolesTx(
+      moduleAddr,
+      setup.member,
+      [setup.roleKey],
+      [true]
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildScopeTargetTx(
     moduleAddr: Address,
     setup: RolesSetupArgs
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildScopeTargetTx(
-          moduleAddr,
-          setup.roleKey,
-          setup.target
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildScopeTargetTx(
+      moduleAddr,
+      setup.roleKey,
+      setup.target
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildScopeFunctionTx(
@@ -618,58 +632,46 @@ export class ZodiacSafeSuite {
     setup: RolesSetupArgs,
     scope: RoleScope
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildScopeFunctionTx(
-          moduleAddr,
-          setup.roleKey,
-          setup.target,
-          scope.selectors,
-          scope.conditions,
-          scope.execOpts ?? ExecutionOptions.Send
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildScopeFunctionTx(
+      moduleAddr,
+      setup.roleKey,
+      setup.target,
+      scope.selectors,
+      scope.conditions,
+      scope.execOpts ?? ExecutionOptions.Send
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async ensureModuleEnabled(
     safe: Address,
     module: Address
   ): Promise<EnsureModuleEnabledResult> {
-    const enabledRes = await match<IsModuleEnabledResult, Result<boolean>>(
-      await this.safeSuite.isModuleEnabled(safe, module),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const enabledRes = await this.safeSuite.isModuleEnabled(safe, module);
 
-    const isEnabled = unwrapOrFail(enabledRes);
-    if (maybeError(isEnabled)) {
-      return { status: 'error', error: isEnabled };
-    }
+    const isEnabled = await matchResult(enabledRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     if (isEnabled) {
-      return { status: 'ok', value: { metaTxs: [] } };
+      return makeOk({ metaTxs: [] });
     }
 
-    const buildRes = await match<BuildSignSafeTx, Result<MetaTransactionData>>(
-      await this.safeSuite.buildEnableModuleTx(safe, module),
-      {
-        ok: ({ value: { txData } }) => ({ status: 'ok', value: txData }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const buildRes = await this.safeSuite.buildEnableModuleTx(safe, module);
 
-    const enableTx = unwrapOrFail(buildRes);
-    if (maybeError(enableTx)) {
-      return { status: 'error', error: enableTx };
-    }
+    const txResult = await matchResult(buildRes, {
+      ok: ({ value: { txData } }) => makeOk(txData),
+      error: ({ error }) => makeError(error),
+    });
 
-    return { status: 'ok', value: { metaTxs: [enableTx] } };
+    return matchResult(txResult, {
+      ok: ({ value }) => makeOk({ metaTxs: [value] }),
+      error: ({ error }) => makeError(error),
+    });
   }
 }

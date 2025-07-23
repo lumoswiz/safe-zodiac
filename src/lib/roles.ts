@@ -25,7 +25,13 @@ import type {
   ConditionFlat,
   ExecutionOptions,
 } from '../types';
-import { isContractDeployed } from './utils';
+import {
+  isContractDeployed,
+  makeError,
+  makeOk,
+  matchResult,
+  toMetaTx,
+} from './utils';
 
 export class ZodiacRolesSuite {
   client: PublicClient;
@@ -68,9 +74,9 @@ export class ZodiacRolesSuite {
         salt,
         bytecode,
       });
-      return { status: 'ok', value: address };
+      return makeOk(address);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
@@ -78,16 +84,15 @@ export class ZodiacRolesSuite {
     safe: Address,
     saltNonce: bigint
   ): Promise<IsModuleDeployedResult> {
-    try {
-      const addrRes = this.calculateModuleProxyAddress(safe, saltNonce);
-      if (addrRes.status === 'error') {
-        return { status: 'error', error: addrRes.error };
-      }
-      const deployed = await isContractDeployed(this.client, addrRes.value);
-      return { status: 'ok', value: deployed };
-    } catch (error) {
-      return { status: 'error', error };
-    }
+    const addrRes = this.calculateModuleProxyAddress(safe, saltNonce);
+
+    const address = await matchResult(addrRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
+
+    const deployed = await isContractDeployed(this.client, address);
+    return { status: 'ok', value: deployed };
   }
 
   async buildDeployModuleTx(
@@ -102,20 +107,20 @@ export class ZodiacRolesSuite {
       if (deployedRes.value) {
         return { status: 'skipped' };
       }
-
-      const data = encodeFunctionData({
-        abi: MODULE_PROXY_FACTORY_ABI,
-        functionName: 'deployModule',
-        args: [
-          ROLES_V2_MODULE_MASTERCOPY,
-          this.getModuleSetUpData(safe),
-          BigInt(saltNonce),
-        ],
-      });
-
       return {
         status: 'built',
-        tx: { to: MODULE_PROXY_FACTORY, value: '0x0', data },
+        tx: toMetaTx({
+          to: MODULE_PROXY_FACTORY,
+          data: encodeFunctionData({
+            abi: MODULE_PROXY_FACTORY_ABI,
+            functionName: 'deployModule',
+            args: [
+              ROLES_V2_MODULE_MASTERCOPY,
+              this.getModuleSetUpData(safe),
+              BigInt(saltNonce),
+            ],
+          }),
+        }),
       };
     } catch (error) {
       return { status: 'error', error };
@@ -123,14 +128,16 @@ export class ZodiacRolesSuite {
   }
 
   private getModuleSetUpData(safe: Address): Hex {
-    const inner = encodeAbiParameters(
-      parseAbiParameters('address,address,address'),
-      [safe, safe, safe]
-    );
     return encodeFunctionData({
       abi: ROLES_V2_MODULE_ABI,
       functionName: 'setUp',
-      args: [inner],
+      args: [
+        encodeAbiParameters(parseAbiParameters('address,address,address'), [
+          safe,
+          safe,
+          safe,
+        ]),
+      ],
     });
   }
 
@@ -141,21 +148,18 @@ export class ZodiacRolesSuite {
     memberOf: boolean[]
   ): Promise<BuildMetaTxResult> {
     try {
-      return {
-        status: 'ok',
-        value: {
+      return makeOk(
+        toMetaTx({
           to: module,
-          value: '0x00',
           data: encodeFunctionData({
             abi: ROLES_V2_MODULE_ABI,
             functionName: 'assignRoles',
             args: [member, roleKeys, memberOf],
           }),
-          operation: 0,
-        },
-      };
+        })
+      );
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
@@ -170,9 +174,9 @@ export class ZodiacRolesSuite {
         functionName: 'isModuleEnabled',
         args: [member],
       });
-      return { status: 'ok', value: isEnabled as boolean };
+      return makeOk(isEnabled);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
@@ -182,21 +186,18 @@ export class ZodiacRolesSuite {
     target: Address
   ): Promise<BuildMetaTxResult> {
     try {
-      return {
-        status: 'ok',
-        value: {
+      return makeOk(
+        toMetaTx({
           to: module,
-          value: '0x00',
           data: encodeFunctionData({
             abi: ROLES_V2_MODULE_ABI,
             functionName: 'scopeTarget',
             args: [roleKey, target],
           }),
-          operation: 0,
-        },
-      };
+        })
+      );
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
@@ -209,21 +210,19 @@ export class ZodiacRolesSuite {
     executionOpts: ExecutionOptions
   ): Promise<BuildMetaTxResult> {
     try {
-      return {
-        status: 'ok',
-        value: {
+      return makeOk(
+        toMetaTx({
           to: module,
-          value: '0x00',
           data: encodeFunctionData({
             abi: ROLES_V2_MODULE_ABI,
             functionName: 'scopeFunction',
             args: [roleKey, target, selector, conditions, executionOpts],
           }),
           operation: 0,
-        },
-      };
+        })
+      );
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 }
