@@ -1,5 +1,10 @@
 import { type PublicClient, type Address, Hex } from 'viem';
-import { MetaTransactionData, OperationType, Result } from '../types';
+import {
+  BuildTxResult,
+  MetaTransactionData,
+  OperationType,
+  Result,
+} from '../types';
 
 export async function isContractDeployed(
   client: PublicClient,
@@ -54,12 +59,16 @@ export async function expectValue<T>(p: Promise<Result<T>>): Promise<T> {
   return v;
 }
 
-export function makeOk<T>(value: T): Result<T> {
+export function makeOk<T, E = unknown>(value: T): Result<T, E> {
   return { status: 'ok', value };
 }
 
 export function makeError<T = unknown>(error: T): Result<never, T> {
   return { status: 'error', error };
+}
+
+export function makeOptional<T, E = unknown>(value?: T): Result<T | null, E> {
+  return makeOk(value ?? null);
 }
 
 export async function matchResult<
@@ -77,4 +86,33 @@ export async function matchResult<
   } else {
     return handlers.error(result as any);
   }
+}
+
+export function mapResult<T, U, E>(
+  res: Result<T, E>,
+  fn: (value: T) => U
+): Result<U, E> {
+  return res.status === 'ok' ? makeOk(fn(res.value)) : res;
+}
+
+export async function flatMapResult<T, E, U>(
+  promise: Promise<Result<T, E>>,
+  fn: (value: T) => Result<U, E> | Promise<Result<U, E>>
+): Promise<Result<U, E>> {
+  const res = await promise;
+  if (res.status === 'error') return res;
+  return fn(res.value);
+}
+
+export function extractOptionalMetaTx(
+  result: Promise<BuildTxResult>
+): Promise<Result<MetaTransactionData | null>> {
+  return flatMapResult(result, (value) => {
+    switch (value.kind) {
+      case 'built':
+        return makeOptional(value.tx);
+      case 'skipped':
+        return makeOptional();
+    }
+  });
 }
