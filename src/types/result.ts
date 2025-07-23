@@ -35,10 +35,11 @@ export type BuildSignSafeTx = Result<{
   safeTxHash: Hex;
 }>;
 
-export type BuildTxResult =
-  | { status: 'skipped' }
-  | { status: 'built'; tx: MetaTransactionData }
-  | Err<unknown>;
+export type BuildTxValue =
+  | { kind: 'built'; tx: MetaTransactionData }
+  | { kind: 'skipped' };
+
+export type BuildTxResult = Result<BuildTxValue>;
 
 export type BuildMetaTxArrayResult = Result<MetaTransactionData[]>;
 
