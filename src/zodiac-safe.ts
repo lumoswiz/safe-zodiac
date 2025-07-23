@@ -145,6 +145,7 @@ export class ZodiacSafeSuite {
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
     const isDeployed = await isContractDeployed(this.safeSuite.client, safe);
+
     if (!isDeployed) {
       const allBuckets = await this.buildInitialSetupTxs(
         safe,
@@ -156,14 +157,14 @@ export class ZodiacSafeSuite {
         extraSetupTxs,
         extraMultisendTxs
       );
-      return { status: 'ok', value: allBuckets };
+      return makeOk(allBuckets);
     }
 
     const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
-    const safeVal = unwrapOrFail(safeRes);
-    if (maybeError(safeVal)) return { status: 'error', error: safeVal };
-
-    const { safeAddress, metaTxs: safeTxs } = safeVal;
+    const { safeAddress, metaTxs: safeTxs } = await matchResult(safeRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     const setupTxs: MetaTransactionData[] = [...safeTxs];
     const multisendTxs: MetaTransactionData[] = [];
@@ -186,14 +187,15 @@ export class ZodiacSafeSuite {
     multisendTxs.push(...extra.multisendTxs);
 
     if (startStage === SetupStage.DeploySafe) {
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
     const rolesRes = await this.ensureRolesModule(safeAddress, rolesNonce);
-    const rolesVal = unwrapOrFail(rolesRes);
-    if (maybeError(rolesVal)) return { status: 'error', error: rolesVal };
+    const { rolesAddress, metaTxs: rolesTxs } = await matchResult(rolesRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
-    const { rolesAddress, metaTxs: rolesTxs } = rolesVal;
     setupTxs.push(...rolesTxs);
 
     if (rolesTxs.length > 0) {
@@ -209,12 +211,14 @@ export class ZodiacSafeSuite {
       );
       setupTxs.push(...extra.setupTxs);
       multisendTxs.push(...extra.multisendTxs);
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
     const enableRes = await this.ensureModuleEnabled(safeAddress, rolesAddress);
-    const enableVal = unwrapOrFail(enableRes);
-    if (maybeError(enableVal)) return { status: 'error', error: enableVal };
+    const enableVal = await matchResult(enableRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     const enableTxs = enableVal.metaTxs;
     multisendTxs.push(...enableTxs);
@@ -231,10 +235,10 @@ export class ZodiacSafeSuite {
         extraMultisendTxs
       );
       multisendTxs.push(...extra.multisendTxs);
-      return { status: 'ok', value: { setupTxs, multisendTxs } };
+      return makeOk({ setupTxs, multisendTxs });
     }
 
-    return { status: 'ok', value: { setupTxs, multisendTxs } };
+    return makeOk({ setupTxs, multisendTxs });
   }
 
   async signTx(
