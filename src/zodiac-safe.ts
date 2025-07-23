@@ -21,7 +21,6 @@ import {
   ExecutionOptions,
   RolesSetupArgs,
   BuildSignSafeTx,
-  BuildMetaTxResult,
   RoleScope,
   SetupStage,
   PartialRolesSetupArgs,
@@ -564,71 +563,72 @@ export class ZodiacSafeSuite {
     owner: Address,
     nonce: bigint
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildTxResult, Result<MetaTransactionData>>(
-        await this.safeSuite.buildSafeDeploymentTx(owner, nonce),
-        {
-          built: ({ tx }) => ({ status: 'ok', value: tx }),
-          skipped: () => ({ status: 'error', error: 'unexpected skip' }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
-    );
+    const result = await this.safeSuite.buildSafeDeploymentTx(owner, nonce);
+
+    const tx = await match(result, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeError('unexpected skip'),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(tx, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildRolesDeployTx(
     safeAddr: Address,
     nonce: bigint
   ): Promise<MetaTransactionData | null> {
-    return expectValue(
-      match<BuildTxResult, Result<MetaTransactionData | null>>(
-        await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce),
-        {
-          built: ({ tx }) => ({ status: 'ok', value: tx }),
-          skipped: () => ({ status: 'ok', value: null }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
-    );
+    const result = await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce);
+
+    const tx: Result<MetaTransactionData | null> = await match<
+      BuildTxResult,
+      Result<MetaTransactionData | null>
+    >(result, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeOk(null),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(tx, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildAssignRolesTx(
     moduleAddr: Address,
     setup: RolesSetupArgs
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildAssignRolesTx(
-          moduleAddr,
-          setup.member,
-          [setup.roleKey],
-          [true]
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildAssignRolesTx(
+      moduleAddr,
+      setup.member,
+      [setup.roleKey],
+      [true]
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildScopeTargetTx(
     moduleAddr: Address,
     setup: RolesSetupArgs
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildScopeTargetTx(
-          moduleAddr,
-          setup.roleKey,
-          setup.target
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildScopeTargetTx(
+      moduleAddr,
+      setup.roleKey,
+      setup.target
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async buildScopeFunctionTx(
@@ -636,22 +636,19 @@ export class ZodiacSafeSuite {
     setup: RolesSetupArgs,
     scope: RoleScope
   ): Promise<MetaTransactionData> {
-    return expectValue(
-      match<BuildMetaTxResult, Result<MetaTransactionData>>(
-        await this.rolesSuite.buildScopeFunctionTx(
-          moduleAddr,
-          setup.roleKey,
-          setup.target,
-          scope.selectors,
-          scope.conditions,
-          scope.execOpts ?? ExecutionOptions.Send
-        ),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const result = await this.rolesSuite.buildScopeFunctionTx(
+      moduleAddr,
+      setup.roleKey,
+      setup.target,
+      scope.selectors,
+      scope.conditions,
+      scope.execOpts ?? ExecutionOptions.Send
     );
+
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
   }
 
   private async ensureModuleEnabled(
