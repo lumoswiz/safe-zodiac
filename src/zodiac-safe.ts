@@ -272,7 +272,6 @@ export class ZodiacSafeSuite {
       return makeError(error);
     }
   }
-
   async signMultisendTx(
     safe: Address,
     multisendTxs: MetaTransactionData[],
@@ -280,46 +279,44 @@ export class ZodiacSafeSuite {
   ): Promise<Result<{ txData: SafeTransactionData; signature: Hex }>> {
     const multisendTx = encodeMulti(multisendTxs);
 
-    return match(
-      await this.safeSuite.buildSignSafeTx(
-        safe,
-        multisendTx.to,
-        multisendTx.data,
-        multisendTx.operation
-      ),
-      {
-        ok: async ({ value: { txData } }) => {
-          try {
-            const version = await this.safeSuite
-              .getVersion(safe)
-              .then(unwrapOrFail);
-            const chainId = await this.safeSuite.client.getChainId();
+    const signResult = await this.safeSuite.buildSignSafeTx(
+      safe,
+      multisendTx.to,
+      multisendTx.data,
+      multisendTx.operation
+    );
 
-            const typedData = generateSafeTypedData({
-              safeAddress: safe,
-              safeVersion: version,
-              chainId,
-              data: txData,
+    return matchResult(signResult, {
+      error: ({ error }) => makeError(error),
+
+      ok: async ({ value: { txData } }) => {
+        try {
+          const version = await expectValue(this.safeSuite.getVersion(safe));
+          const chainId = await this.safeSuite.client.getChainId();
+
+          const typedData = generateSafeTypedData({
+            safeAddress: safe,
+            safeVersion: version,
+            chainId,
+            data: txData,
+          });
+
+          const signature = await this.safeSuite.client
+            .extend(walletActions)
+            .signTypedData({
+              account,
+              domain: typedData.domain,
+              types: typedData.types,
+              primaryType: typedData.primaryType,
+              message: typedData.message,
             });
 
-            const signature = await this.safeSuite.client
-              .extend(walletActions)
-              .signTypedData({
-                account,
-                domain: typedData.domain,
-                types: typedData.types,
-                primaryType: typedData.primaryType,
-                message: typedData.message,
-              });
-
-            return { status: 'ok', value: { txData, signature } };
-          } catch (error) {
-            return { status: 'error', error };
-          }
-        },
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+          return makeOk({ txData, signature });
+        } catch (error) {
+          return makeError(error);
+        }
+      },
+    });
   }
 
   async execTx(
