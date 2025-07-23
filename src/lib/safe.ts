@@ -43,7 +43,13 @@ import {
   BuildSignSafeTx,
   MetaTransactionData,
 } from '../types';
-import { isContractDeployed, makeError, makeOk, matchResult } from './utils';
+import {
+  isContractDeployed,
+  makeError,
+  makeOk,
+  matchResult,
+  toMetaTx,
+} from './utils';
 import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
@@ -198,12 +204,11 @@ export class SafeContractSuite {
     try {
       const deployedRes = await this.isSafeDeployed([owner], saltNonce);
       if (deployedRes.status === 'error') {
-        return { status: 'error', error: deployedRes.error };
+        return makeError(deployedRes.error);
       }
       if (deployedRes.value) {
-        return { status: 'skipped' };
+        return makeOk({ kind: 'skipped' });
       }
-
       const setup = encodeFunctionData({
         abi: SAFE_SINGLETON_ABI,
         functionName: 'setup',
@@ -218,19 +223,19 @@ export class SafeContractSuite {
           ZERO_ADDRESS,
         ],
       });
-
-      const data = encodeFunctionData({
-        abi: SAFE_PROXY_FACTORY_ABI,
-        functionName: 'createProxyWithNonce',
-        args: [SAFE_SINGLETON, setup, saltNonce],
+      return makeOk({
+        kind: 'built',
+        tx: toMetaTx({
+          to: SAFE_PROXY_FACTORY,
+          data: encodeFunctionData({
+            abi: SAFE_PROXY_FACTORY_ABI,
+            functionName: 'createProxyWithNonce',
+            args: [SAFE_SINGLETON, setup, saltNonce],
+          }),
+        }),
       });
-
-      return {
-        status: 'built',
-        tx: { to: SAFE_PROXY_FACTORY, value: '0x0', data },
-      };
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
