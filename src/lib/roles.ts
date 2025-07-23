@@ -128,14 +128,16 @@ export class ZodiacRolesSuite {
   }
 
   private getModuleSetUpData(safe: Address): Hex {
-    const inner = encodeAbiParameters(
-      parseAbiParameters('address,address,address'),
-      [safe, safe, safe]
-    );
     return encodeFunctionData({
       abi: ROLES_V2_MODULE_ABI,
       functionName: 'setUp',
-      args: [inner],
+      args: [
+        encodeAbiParameters(parseAbiParameters('address,address,address'), [
+          safe,
+          safe,
+          safe,
+        ]),
+      ],
     });
   }
 
