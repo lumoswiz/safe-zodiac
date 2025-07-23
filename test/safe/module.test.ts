@@ -3,8 +3,7 @@ import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, DUMMY_MODULE, SENTINEL_ADDRESS } from '../src/constants';
-import { signAndExec, unwrap, deploySafe } from '../utils';
-import { match } from '../../src/lib/utils';
+import { signAndExec, expectOk, deploySafe } from '../utils';
 import { Address, createPublicClient, http, PublicClient } from 'viem';
 import { foundry } from 'viem/chains';
 
@@ -26,69 +25,89 @@ describe('Safe Modules', () => {
   });
 
   test('module is disabled by default', async () => {
-    const res = await suite.isModuleEnabled(
-      DEPLOYED_SAFE_ADDRESS,
-      DUMMY_MODULE
+    const isEnabled = expectOk(
+      await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Expected module to be disabled by default'
     );
-    expect(unwrap(res)).toBe(false);
+    expect(isEnabled).toBe(false);
   });
 
   test('enableModule tx flips isModuleEnabled to true', async () => {
-    let txData: any;
-    await match(
-      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
-      {
-        error: ({ error }) => {
-          throw new Error(`Could not build enableModule tx: ${error}`);
-        },
-        ok: async ({ value }) => {
-          txData = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, txData!, account);
-        },
-      }
+    const enableRes = await suite.buildEnableModuleTx(
+      DEPLOYED_SAFE_ADDRESS,
+      DUMMY_MODULE
     );
-    expect(
-      unwrap(await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE))
-    ).toBe(true);
+
+    if (enableRes.status === 'error') {
+      throw new Error(
+        `Could not build enableModule tx: ${String(enableRes.error)}`
+      );
+    }
+
+    await signAndExec(
+      suite,
+      DEPLOYED_SAFE_ADDRESS,
+      enableRes.value.txData,
+      account
+    );
+
+    const isEnabled = expectOk(
+      await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Module should be enabled after enableModule tx'
+    );
+    expect(isEnabled).toBe(true);
   });
 
   test('disableModule tx flips isModuleEnabled to false', async () => {
-    let enableTx: any;
-    await match(
-      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
-      {
-        error: ({ error }) => {
-          throw new Error(`Could not build enableModule tx: ${error}`);
-        },
-        ok: async ({ value }) => {
-          enableTx = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, enableTx!, account);
-        },
-      }
+    // Enable first
+    const enableRes = await suite.buildEnableModuleTx(
+      DEPLOYED_SAFE_ADDRESS,
+      DUMMY_MODULE
     );
-    expect(
-      unwrap(await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE))
-    ).toBe(true);
 
-    let disableTx: any;
-    await match(
-      await suite.buildDisableModuleTx(
-        DEPLOYED_SAFE_ADDRESS,
-        SENTINEL_ADDRESS,
-        DUMMY_MODULE
-      ),
-      {
-        error: ({ error }) => {
-          throw new Error(`Could not build disableModule tx: ${error}`);
-        },
-        ok: async ({ value }) => {
-          disableTx = value.txData;
-          await signAndExec(suite, DEPLOYED_SAFE_ADDRESS, disableTx!, account);
-        },
-      }
+    if (enableRes.status === 'error') {
+      throw new Error(
+        `Could not build enableModule tx: ${String(enableRes.error)}`
+      );
+    }
+
+    await signAndExec(
+      suite,
+      DEPLOYED_SAFE_ADDRESS,
+      enableRes.value.txData,
+      account
     );
-    expect(
-      unwrap(await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE))
-    ).toBe(false);
+
+    const isNowEnabled = expectOk(
+      await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Module should be enabled before disableModule tx'
+    );
+    expect(isNowEnabled).toBe(true);
+
+    // Now disable
+    const disableRes = await suite.buildDisableModuleTx(
+      DEPLOYED_SAFE_ADDRESS,
+      SENTINEL_ADDRESS,
+      DUMMY_MODULE
+    );
+
+    if (disableRes.status === 'error') {
+      throw new Error(
+        `Could not build disableModule tx: ${String(disableRes.error)}`
+      );
+    }
+
+    await signAndExec(
+      suite,
+      DEPLOYED_SAFE_ADDRESS,
+      disableRes.value.txData,
+      account
+    );
+
+    const isNowDisabled = expectOk(
+      await suite.isModuleEnabled(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Module should be disabled after disableModule tx'
+    );
+    expect(isNowDisabled).toBe(false);
   });
 });

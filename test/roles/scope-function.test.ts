@@ -1,6 +1,6 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { deployAndSetupRoles, signAndExec, unwrap } from '../utils';
+import { deployAndSetupRoles, signAndExec, expectOk } from '../utils';
 import {
   Address,
   createPublicClient,
@@ -53,12 +53,14 @@ describe('Scope Function', () => {
       memberOf: [true],
     }));
 
-    const { to, data } = unwrap(
-      await rolesSuite.buildScopeTargetTx(ROLES_ADDRESS, ROLE_KEY, TARGET)
+    const { to, data } = expectOk(
+      await rolesSuite.buildScopeTargetTx(ROLES_ADDRESS, ROLE_KEY, TARGET),
+      'Failed to build scopeTarget tx'
     );
 
-    const { txData } = unwrap(
-      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data)
+    const { txData } = expectOk(
+      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data),
+      'Failed to wrap scopeTarget in Safe tx'
     );
 
     await signAndExec(safeSuite, SAFE_ADDRESS, txData, account);
@@ -72,21 +74,18 @@ describe('Scope Function', () => {
         operator: Operator.Matches,
         compValue: '0x',
       },
-
       {
         parent: 0,
         paramType: ParameterType.Static,
         operator: Operator.EqualTo,
         compValue: encodeAbiParameters(parseAbiParameters('address'), [WETH]),
       },
-
       {
         parent: 0,
         paramType: ParameterType.Static,
         operator: Operator.Pass,
         compValue: '0x',
       },
-
       {
         parent: 0,
         paramType: ParameterType.Static,
@@ -103,7 +102,7 @@ describe('Scope Function', () => {
       },
     ];
 
-    const { to, data } = unwrap(
+    const { to, data } = expectOk(
       await rolesSuite.buildScopeFunctionTx(
         ROLES_ADDRESS,
         ROLE_KEY,
@@ -111,11 +110,13 @@ describe('Scope Function', () => {
         SUPPLY_SELECTOR,
         conditions,
         ExecutionOptions.Send
-      )
+      ),
+      'Failed to build scopeFunction tx'
     );
 
-    const { txData } = unwrap(
-      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data)
+    const { txData } = expectOk(
+      await safeSuite.buildSignSafeTx(SAFE_ADDRESS, to, data),
+      'Failed to wrap scopeFunction in Safe tx'
     );
 
     await signAndExec(safeSuite, SAFE_ADDRESS, txData, account);

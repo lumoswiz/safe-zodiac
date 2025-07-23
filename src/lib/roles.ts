@@ -102,13 +102,13 @@ export class ZodiacRolesSuite {
     try {
       const deployedRes = await this.isModuleDeployed(safe, saltNonce);
       if (deployedRes.status === 'error') {
-        return { status: 'error', error: deployedRes.error };
+        return makeError(deployedRes.error);
       }
       if (deployedRes.value) {
-        return { status: 'skipped' };
+        return makeOk({ kind: 'skipped' });
       }
-      return {
-        status: 'built',
+      return makeOk({
+        kind: 'built',
         tx: toMetaTx({
           to: MODULE_PROXY_FACTORY,
           data: encodeFunctionData({
@@ -121,9 +121,9 @@ export class ZodiacRolesSuite {
             ],
           }),
         }),
-      };
+      });
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 

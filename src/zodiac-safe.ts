@@ -15,7 +15,6 @@ import {
   MetaTransactionData,
   Result,
   EnsureSafeResult,
-  BuildTxResult,
   EnsureRolesResult,
   BuildTxBucketsResult,
   ExecutionOptions,
@@ -28,10 +27,10 @@ import {
 } from './types';
 import {
   expectValue,
+  extractOptionalMetaTx,
   isContractDeployed,
   makeError,
   makeOk,
-  match,
   matchResult,
 } from './lib/utils';
 import { generateSafeTypedData } from './lib/safe-eip712';
@@ -367,19 +366,9 @@ export class ZodiacSafeSuite {
     });
 
     if (!isValid) {
-      const deployRes = await this.safeSuite.buildSafeDeploymentTx(
-        owner,
-        safeNonce
+      const buildRes = await extractOptionalMetaTx(
+        this.safeSuite.buildSafeDeploymentTx(owner, safeNonce)
       );
-
-      const buildRes = await match<
-        BuildTxResult,
-        Result<MetaTransactionData | null>
-      >(deployRes, {
-        built: ({ tx }) => makeOk(tx),
-        skipped: () => makeOk(null),
-        error: ({ error }) => makeError(error),
-      });
 
       return matchResult(buildRes, {
         ok: ({ value }) =>
@@ -440,19 +429,9 @@ export class ZodiacSafeSuite {
       return makeOk({ rolesAddress, metaTxs: [] });
     }
 
-    const buildRes = await this.rolesSuite.buildDeployModuleTx(
-      safe,
-      rolesNonce
+    const deployResult = await extractOptionalMetaTx(
+      this.rolesSuite.buildDeployModuleTx(safe, rolesNonce)
     );
-
-    const deployResult = await match<
-      BuildTxResult,
-      Result<MetaTransactionData | null>
-    >(buildRes, {
-      built: ({ tx }) => makeOk(tx),
-      skipped: () => makeOk(null),
-      error: ({ error }) => makeError(error),
-    });
 
     return matchResult(deployResult, {
       ok: ({ value }) =>
@@ -477,7 +456,7 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const addrResult = await this.rolesSuite.calculateModuleProxyAddress(
+    const addrResult = this.rolesSuite.calculateModuleProxyAddress(
       safeAddress,
       rolesNonce
     );
@@ -559,16 +538,17 @@ export class ZodiacSafeSuite {
     owner: Address,
     nonce: bigint
   ): Promise<MetaTransactionData> {
-    const result = await this.safeSuite.buildSafeDeploymentTx(owner, nonce);
+    const txResult = await extractOptionalMetaTx(
+      this.safeSuite.buildSafeDeploymentTx(owner, nonce)
+    );
 
-    const tx = await match(result, {
-      built: ({ tx }) => makeOk(tx),
-      skipped: () => makeError('unexpected skip'),
-      error: ({ error }) => makeError(error),
-    });
-
-    return matchResult(tx, {
-      ok: ({ value }) => value,
+    return matchResult(txResult, {
+      ok: ({ value }) => {
+        if (!value) {
+          return Promise.reject('unexpected skip');
+        }
+        return value;
+      },
       error: ({ error }) => Promise.reject(error),
     });
   }
@@ -577,18 +557,11 @@ export class ZodiacSafeSuite {
     safeAddr: Address,
     nonce: bigint
   ): Promise<MetaTransactionData | null> {
-    const result = await this.rolesSuite.buildDeployModuleTx(safeAddr, nonce);
+    const txResult = await extractOptionalMetaTx(
+      this.rolesSuite.buildDeployModuleTx(safeAddr, nonce)
+    );
 
-    const tx: Result<MetaTransactionData | null> = await match<
-      BuildTxResult,
-      Result<MetaTransactionData | null>
-    >(result, {
-      built: ({ tx }) => makeOk(tx),
-      skipped: () => makeOk(null),
-      error: ({ error }) => makeError(error),
-    });
-
-    return matchResult(tx, {
+    return matchResult(txResult, {
       ok: ({ value }) => value,
       error: ({ error }) => Promise.reject(error),
     });

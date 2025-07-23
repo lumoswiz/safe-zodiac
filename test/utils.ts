@@ -3,12 +3,11 @@ import { SafeContractSuite } from '../src/lib/safe';
 import { ZodiacRolesSuite } from '../src/lib/roles';
 import { Result, SafeTransactionData } from '../src/types';
 import { generateSafeTypedData } from '../src/lib/safe-eip712';
-import { match } from '../src/lib/utils';
 import { account, DEPLOYED_SALT_NONCE } from './src/constants';
 
-export function unwrap<T>(res: Result<T>): T {
+export function expectOk<T, E>(res: Result<T, E>, label = 'Expected ok'): T {
   if (res.status === 'ok') return res.value;
-  throw new Error(`Expected ok, got ${res.status}: ${res.error}`);
+  throw new Error(`${label}, got error: ${String(res.error)}`);
 }
 
 export async function sign(
@@ -17,7 +16,10 @@ export async function sign(
   txData: SafeTransactionData,
   account: Account
 ): Promise<Hex> {
-  const version = unwrap(await suite.getVersion(safeAddress));
+  const version = expectOk(
+    await suite.getVersion(safeAddress),
+    'Failed to get Safe version in sign()'
+  );
   const chainId = await suite.client.getChainId();
   const typedData = generateSafeTypedData({
     safeAddress,
@@ -45,23 +47,27 @@ export async function signAndExec(
 ) {
   const signature: Hex = await sign(suite, safeAddress, txData, account);
 
-  await match(
-    await suite.buildExecTransaction(safeAddress, txData, signature),
-    {
-      error: ({ error }) => {
-        throw new Error(`Could not build execTransaction call: ${error}`);
-      },
-      ok: async ({ value: { to, data, value } }) => {
-        await suite.client.extend(walletActions).sendTransaction({
-          account,
-          chain: null,
-          to,
-          data,
-          value: BigInt(value),
-        });
-      },
-    }
+  const execResult = await suite.buildExecTransaction(
+    safeAddress,
+    txData,
+    signature
   );
+
+  if (execResult.status === 'error') {
+    throw new Error(
+      `Could not build execTransaction call: ${String(execResult.error)}`
+    );
+  }
+
+  const { to, data, value } = execResult.value;
+
+  await suite.client.extend(walletActions).sendTransaction({
+    account,
+    chain: null,
+    to,
+    data,
+    value: BigInt(value),
+  });
 }
 
 export async function deploySafe(
@@ -71,29 +77,33 @@ export async function deploySafe(
 ): Promise<{ safeAddress: Address; suite: SafeContractSuite }> {
   const suite = new SafeContractSuite(publicClient);
 
-  const safeAddress = unwrap(
-    await suite.calculateSafeAddress(owners, saltNonce)
+  const safeAddress = expectOk(
+    await suite.calculateSafeAddress(owners, saltNonce),
+    'Failed to calculate Safe address'
   );
 
   const txRes = await suite.buildSafeDeploymentTx(owners[0], saltNonce);
 
-  await match(txRes, {
-    error: ({ error }) => {
-      throw new Error(error instanceof Error ? error.message : String(error));
-    },
-    skipped: () => {},
-    built: async ({ tx }) => {
-      const hash = await publicClient.extend(walletActions).sendTransaction({
-        account,
-        chain: null,
-        to: tx.to,
-        data: tx.data,
-        value: BigInt(tx.value),
-      });
+  if (txRes.status === 'error') {
+    const errorMsg =
+      txRes.error instanceof Error ? txRes.error.message : String(txRes.error);
+    throw new Error(`Failed to build deployment tx: ${errorMsg}`);
+  }
 
-      await publicClient.waitForTransactionReceipt({ hash });
-    },
-  });
+  if (txRes.value.kind === 'skipped') {
+  } else if (txRes.value.kind === 'built') {
+    const { to, data, value } = txRes.value.tx;
+    const hash = await publicClient.extend(walletActions).sendTransaction({
+      account,
+      chain: null,
+      to,
+      data,
+      value: BigInt(value),
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+  } else {
+    throw new Error(`Unexpected tx kind: ${(txRes.value as any).kind}`);
+  }
 
   return { safeAddress, suite };
 }
@@ -108,31 +118,38 @@ export async function deployRoles(
 }> {
   const suite = new ZodiacRolesSuite(publicClient);
 
-  const rolesAddress = unwrap(
-    suite.calculateModuleProxyAddress(safeAddress, saltNonce)
+  const rolesAddress = expectOk(
+    suite.calculateModuleProxyAddress(safeAddress, saltNonce),
+    'Failed to calculate Roles module proxy address'
   );
 
   const txRes = await suite.buildDeployModuleTx(safeAddress, saltNonce);
 
-  await match(txRes, {
-    error: ({ error }) => {
-      throw new Error(error instanceof Error ? error.message : String(error));
-    },
-    skipped: () => {
-      return;
-    },
-    built: async ({ tx }) => {
-      const hash = await publicClient.extend(walletActions).sendTransaction({
-        account,
-        chain: null,
-        to: tx.to,
-        data: tx.data,
-        value: BigInt(tx.value),
-      });
+  if (txRes.status === 'error') {
+    const msg =
+      txRes.error instanceof Error ? txRes.error.message : String(txRes.error);
+    throw new Error(`Failed to build roles deployment tx: ${msg}`);
+  }
 
-      await publicClient.waitForTransactionReceipt({ hash });
-    },
-  });
+  if (txRes.value.kind === 'skipped') {
+    return { rolesAddress, suite };
+  }
+
+  if (txRes.value.kind === 'built') {
+    const { to, data, value } = txRes.value.tx;
+
+    const hash = await publicClient.extend(walletActions).sendTransaction({
+      account,
+      chain: null,
+      to,
+      data,
+      value: BigInt(value),
+    });
+
+    await publicClient.waitForTransactionReceipt({ hash });
+  } else {
+    throw new Error(`Unexpected tx kind: ${(txRes.value as any).kind}`);
+  }
 
   return { rolesAddress, suite };
 }
@@ -158,19 +175,26 @@ export async function deploySafeWithRoles(
     saltNonce
   );
 
-  await match(await safeSuite.buildEnableModuleTx(safeAddress, rolesAddress), {
-    error: ({ error }) => {
-      throw new Error(`Could not build enableModule tx: ${error}`);
-    },
-    ok: async ({ value: { txData } }) => {
-      await signAndExec(safeSuite, safeAddress, txData, account);
-    },
-  });
-
-  const enabled = unwrap(
-    await safeSuite.isModuleEnabled(safeAddress, rolesAddress)
+  const enableRes = await safeSuite.buildEnableModuleTx(
+    safeAddress,
+    rolesAddress
   );
-  if (!enabled) {
+
+  if (enableRes.status === 'error') {
+    throw new Error(
+      `Could not build enableModule tx: ${String(enableRes.error)}`
+    );
+  }
+
+  const { txData } = enableRes.value;
+  await signAndExec(safeSuite, safeAddress, txData, account);
+
+  const isEnabled = expectOk(
+    await safeSuite.isModuleEnabled(safeAddress, rolesAddress),
+    'Roles module failed to enable on the Safe'
+  );
+
+  if (!isEnabled) {
     throw new Error('Roles module failed to enable on the Safe');
   }
 
@@ -199,33 +223,33 @@ export async function deployAndSetupRoles(
   const { safeAddress, rolesAddress, safeSuite, rolesSuite } =
     await deploySafeWithRoles(publicClient, saltNonce);
 
-  await match(
-    await rolesSuite.buildAssignRolesTx(
-      rolesAddress,
-      member,
-      roleKeys,
-      memberOf
-    ),
-    {
-      error: ({ error }) => {
-        throw new Error(`Could not build Roles tx: ${error}`);
-      },
-      ok: async ({ value: { to, data } }) => {
-        await match(await safeSuite.buildSignSafeTx(safeAddress, to, data), {
-          error: ({ error }) => {
-            throw new Error(`Could not wrap in Safe tx: ${error}`);
-          },
-          ok: async ({ value: { txData } }) => {
-            await signAndExec(safeSuite, safeAddress, txData, account);
-          },
-        });
-      },
-    }
+  const rolesTxResult = await rolesSuite.buildAssignRolesTx(
+    rolesAddress,
+    member,
+    roleKeys,
+    memberOf
   );
 
-  const enabled = unwrap(
-    await safeSuite.isModuleEnabled(safeAddress, rolesAddress)
+  if (rolesTxResult.status === 'error') {
+    throw new Error(`Could not build Roles tx: ${String(rolesTxResult.error)}`);
+  }
+
+  const { to, data } = rolesTxResult.value;
+
+  const safeTxResult = await safeSuite.buildSignSafeTx(safeAddress, to, data);
+
+  if (safeTxResult.status === 'error') {
+    throw new Error(`Could not wrap in Safe tx: ${String(safeTxResult.error)}`);
+  }
+
+  const { txData } = safeTxResult.value;
+  await signAndExec(safeSuite, safeAddress, txData, account);
+
+  const enabled = expectOk(
+    await safeSuite.isModuleEnabled(safeAddress, rolesAddress),
+    'Roles module failed to stay enabled on the Safe'
   );
+
   if (!enabled) {
     throw new Error('Roles module failed to stay enabled on the Safe');
   }
