@@ -25,7 +25,7 @@ import type {
   ConditionFlat,
   ExecutionOptions,
 } from '../types';
-import { isContractDeployed } from './utils';
+import { isContractDeployed, matchResult } from './utils';
 
 export class ZodiacRolesSuite {
   client: PublicClient;
@@ -78,16 +78,15 @@ export class ZodiacRolesSuite {
     safe: Address,
     saltNonce: bigint
   ): Promise<IsModuleDeployedResult> {
-    try {
-      const addrRes = this.calculateModuleProxyAddress(safe, saltNonce);
-      if (addrRes.status === 'error') {
-        return { status: 'error', error: addrRes.error };
-      }
-      const deployed = await isContractDeployed(this.client, addrRes.value);
-      return { status: 'ok', value: deployed };
-    } catch (error) {
-      return { status: 'error', error };
-    }
+    const addrRes = this.calculateModuleProxyAddress(safe, saltNonce);
+
+    const address = await matchResult(addrRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
+
+    const deployed = await isContractDeployed(this.client, address);
+    return { status: 'ok', value: deployed };
   }
 
   async buildDeployModuleTx(
