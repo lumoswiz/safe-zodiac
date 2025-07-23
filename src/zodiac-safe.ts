@@ -267,9 +267,9 @@ export class ZodiacSafeSuite {
           message: typedData.message,
         });
 
-      return { status: 'ok', value: signature };
+      return makeOk(signature);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
