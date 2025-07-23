@@ -43,7 +43,13 @@ import {
   BuildSignSafeTx,
   MetaTransactionData,
 } from '../types';
-import { isContractDeployed, match } from './utils';
+import {
+  isContractDeployed,
+  makeError,
+  makeOk,
+  match,
+  matchResult,
+} from './utils';
 import { generateSafeTypedData } from './safe-eip712';
 
 export class SafeContractSuite {
@@ -436,27 +442,24 @@ export class SafeContractSuite {
     data: Hex,
     operation: OperationType = OperationType.Call
   ): Promise<SafeTransactionDataResult> {
-    return match<GetNonceResult, SafeTransactionDataResult>(
-      await this.getNonce(safe),
-      {
-        ok: ({ value: nonce }) => ({
-          status: 'ok',
-          value: {
-            to,
-            value: '0x0',
-            data,
-            operation,
-            safeTxGas: 0n,
-            baseGas: 0n,
-            gasPrice: 0n,
-            gasToken: ZERO_ADDRESS,
-            refundReceiver: ZERO_ADDRESS,
-            nonce,
-          },
+    const nonceResult = await this.getNonce(safe);
+
+    return matchResult(nonceResult, {
+      ok: ({ value: nonce }) =>
+        makeOk({
+          to,
+          value: '0x0',
+          data,
+          operation,
+          safeTxGas: 0n,
+          baseGas: 0n,
+          gasPrice: 0n,
+          gasToken: ZERO_ADDRESS,
+          refundReceiver: ZERO_ADDRESS,
+          nonce,
         }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+      error: ({ error }) => makeError(error),
+    });
   }
 
   async buildSignSafeTx(
