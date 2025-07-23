@@ -3,7 +3,7 @@ import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, DUMMY_MODULE, FAKE_SIGNATURE } from '../src/constants';
-import { sign, unwrap, deploySafe } from '../utils';
+import { sign, expectOk, deploySafe } from '../utils';
 import { Address, createPublicClient, http, PublicClient } from 'viem';
 import { foundry } from 'viem/chains';
 
@@ -25,42 +25,54 @@ describe('isTransactionReady helper', () => {
   });
 
   test('isTransactionReady returns false when no signatures', async () => {
-    const { txData, safeTxHash } = unwrap(
-      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE)
+    const { txData, safeTxHash } = expectOk(
+      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Failed to build enableModule tx'
     );
 
-    const threshold = unwrap(await suite.getThreshold(DEPLOYED_SAFE_ADDRESS));
+    const threshold = expectOk(
+      await suite.getThreshold(DEPLOYED_SAFE_ADDRESS),
+      'Failed to get threshold'
+    );
 
-    const ready = unwrap(
+    const ready = expectOk(
       await suite.isTransactionReady(
         DEPLOYED_SAFE_ADDRESS,
         safeTxHash,
         txData.data,
         [FAKE_SIGNATURE],
         threshold
-      )
+      ),
+      'Expected isTransactionReady to return false with invalid signature'
     );
+
     expect(ready).toBe(false);
   });
 
   test('isTransactionReady returns true when correct signatures', async () => {
-    const { txData, safeTxHash } = unwrap(
-      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE)
+    const { txData, safeTxHash } = expectOk(
+      await suite.buildEnableModuleTx(DEPLOYED_SAFE_ADDRESS, DUMMY_MODULE),
+      'Failed to build enableModule tx'
     );
 
-    const threshold = unwrap(await suite.getThreshold(DEPLOYED_SAFE_ADDRESS));
+    const threshold = expectOk(
+      await suite.getThreshold(DEPLOYED_SAFE_ADDRESS),
+      'Failed to get threshold'
+    );
 
     const signature = await sign(suite, DEPLOYED_SAFE_ADDRESS, txData, account);
 
-    const ready = unwrap(
+    const ready = expectOk(
       await suite.isTransactionReady(
         DEPLOYED_SAFE_ADDRESS,
         safeTxHash,
         txData.data,
         [signature],
         threshold
-      )
+      ),
+      'Expected isTransactionReady to return true with valid signature'
     );
+
     expect(ready).toBe(true);
   });
 });
