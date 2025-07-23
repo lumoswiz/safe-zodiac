@@ -107,20 +107,20 @@ export class ZodiacRolesSuite {
       if (deployedRes.value) {
         return { status: 'skipped' };
       }
-
-      const data = encodeFunctionData({
-        abi: MODULE_PROXY_FACTORY_ABI,
-        functionName: 'deployModule',
-        args: [
-          ROLES_V2_MODULE_MASTERCOPY,
-          this.getModuleSetUpData(safe),
-          BigInt(saltNonce),
-        ],
-      });
-
       return {
         status: 'built',
-        tx: { to: MODULE_PROXY_FACTORY, value: '0x0', data },
+        tx: toMetaTx({
+          to: MODULE_PROXY_FACTORY,
+          data: encodeFunctionData({
+            abi: MODULE_PROXY_FACTORY_ABI,
+            functionName: 'deployModule',
+            args: [
+              ROLES_V2_MODULE_MASTERCOPY,
+              this.getModuleSetUpData(safe),
+              BigInt(saltNonce),
+            ],
+          }),
+        }),
       };
     } catch (error) {
       return { status: 'error', error };
