@@ -27,19 +27,6 @@ export function toMetaTx(tx: {
   };
 }
 
-export async function match<
-  T extends { status: string },
-  R,
-  K extends T['status'] = T['status']
->(
-  value: T,
-  handlers: { [P in K]: (val: Extract<T, { status: P }>) => R | Promise<R> }
-): Promise<R> {
-  const handler = handlers[value.status as K];
-  if (!handler) throw new Error(`Unhandled case: ${value.status}`);
-  return await handler(value as Extract<T, { status: K }>);
-}
-
 export function unwrapOrFail<R, E>(
   res: Result<R, E>
 ): R | (E & { _isError: true }) {
