@@ -17,7 +17,6 @@ import {
   EnsureSafeResult,
   BuildTxResult,
   EnsureRolesResult,
-  CalculateModuleProxyAddressResult,
   BuildTxBucketsResult,
   ExecutionOptions,
   RolesSetupArgs,
@@ -483,15 +482,15 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const rolesAddress = await expectValue(
-      match<CalculateModuleProxyAddressResult, Result<Address>>(
-        this.rolesSuite.calculateModuleProxyAddress(safeAddress, rolesNonce),
-        {
-          ok: ({ value }) => ({ status: 'ok', value }),
-          error: ({ error }) => ({ status: 'error', error }),
-        }
-      )
+    const addrResult = await this.rolesSuite.calculateModuleProxyAddress(
+      safeAddress,
+      rolesNonce
     );
+
+    const rolesAddress = await matchResult(addrResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     type StepFn = () => Promise<void>;
 
