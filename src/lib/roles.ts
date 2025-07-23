@@ -167,9 +167,9 @@ export class ZodiacRolesSuite {
         functionName: 'isModuleEnabled',
         args: [member],
       });
-      return { status: 'ok', value: isEnabled as boolean };
+      return makeOk(isEnabled as boolean);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
