@@ -6,9 +6,9 @@ import { generateSafeTypedData } from '../src/lib/safe-eip712';
 import { match } from '../src/lib/utils';
 import { account, DEPLOYED_SALT_NONCE } from './src/constants';
 
-export function unwrap<T>(res: Result<T>): T {
+export function expectOk<T, E>(res: Result<T, E>, label = 'Expected ok'): T {
   if (res.status === 'ok') return res.value;
-  throw new Error(`Expected ok, got ${res.status}: ${res.error}`);
+  throw new Error(`${label}, got error: ${String(res.error)}`);
 }
 
 export async function sign(
@@ -71,29 +71,33 @@ export async function deploySafe(
 ): Promise<{ safeAddress: Address; suite: SafeContractSuite }> {
   const suite = new SafeContractSuite(publicClient);
 
-  const safeAddress = unwrap(
-    await suite.calculateSafeAddress(owners, saltNonce)
+  const safeAddress = expectOk(
+    await suite.calculateSafeAddress(owners, saltNonce),
+    'Failed to calculate Safe address'
   );
 
   const txRes = await suite.buildSafeDeploymentTx(owners[0], saltNonce);
 
-  await match(txRes, {
-    error: ({ error }) => {
-      throw new Error(error instanceof Error ? error.message : String(error));
-    },
-    skipped: () => {},
-    built: async ({ tx }) => {
-      const hash = await publicClient.extend(walletActions).sendTransaction({
-        account,
-        chain: null,
-        to: tx.to,
-        data: tx.data,
-        value: BigInt(tx.value),
-      });
+  if (txRes.status === 'error') {
+    const errorMsg =
+      txRes.error instanceof Error ? txRes.error.message : String(txRes.error);
+    throw new Error(`Failed to build deployment tx: ${errorMsg}`);
+  }
 
-      await publicClient.waitForTransactionReceipt({ hash });
-    },
-  });
+  if (txRes.value.kind === 'skipped') {
+  } else if (txRes.value.kind === 'built') {
+    const { to, data, value } = txRes.value.tx;
+    const hash = await publicClient.extend(walletActions).sendTransaction({
+      account,
+      chain: null,
+      to,
+      data,
+      value: BigInt(value),
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+  } else {
+    throw new Error(`Unexpected tx kind: ${(txRes.value as any).kind}`);
+  }
 
   return { safeAddress, suite };
 }

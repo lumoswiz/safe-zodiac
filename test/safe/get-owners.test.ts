@@ -2,8 +2,7 @@ import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { SafeContractSuite } from '../../src/lib/safe';
 import { account, SALT_NONCE } from '../src/constants';
-import { unwrap, deploySafe } from '../utils';
-import { match } from '../../src/lib/utils';
+import { deploySafe, expectOk } from '../utils';
 import { Address, createPublicClient, PublicClient, http } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
@@ -20,58 +19,60 @@ describe('Owner Helpers', () => {
       transport: http(testConfig.rpcUrl),
     });
 
-    suite = new SafeContractSuite(publicClient);
-
     ({ safeAddress: DEPLOYED_SAFE_ADDRESS, suite } = await deploySafe(
       publicClient
     ));
 
-    UNDEPLOYED_SAFE_ADDRESS = unwrap(
-      await suite.calculateSafeAddress([account.address], SALT_NONCE)
+    UNDEPLOYED_SAFE_ADDRESS = expectOk(
+      await suite.calculateSafeAddress([account.address], SALT_NONCE),
+      'Failed to calculate undeployed Safe address'
     );
   });
 
   test('getOwners includes the deployer', async () => {
-    const owners = unwrap(await suite.getOwners(DEPLOYED_SAFE_ADDRESS));
+    const owners = expectOk(
+      await suite.getOwners(DEPLOYED_SAFE_ADDRESS),
+      'Failed to get owners'
+    );
     expect(owners).toContain(account.address);
   });
 
   test('isOwner true/false', async () => {
-    expect(
-      unwrap(await suite.isOwner(DEPLOYED_SAFE_ADDRESS, account.address))
-    ).toBe(true);
-    const notOwner: Address = '0xcafee5b8e78900e7130a9eef940fe898c610c0f9';
-    expect(unwrap(await suite.isOwner(DEPLOYED_SAFE_ADDRESS, notOwner))).toBe(
-      false
+    const isOwner = expectOk(
+      await suite.isOwner(DEPLOYED_SAFE_ADDRESS, account.address),
+      'Failed to check ownership for known owner'
     );
+    expect(isOwner).toBe(true);
+
+    const notOwner: Address = '0xcafee5b8e78900e7130a9eef940fe898c610c0f9';
+    const isNotOwner = expectOk(
+      await suite.isOwner(DEPLOYED_SAFE_ADDRESS, notOwner),
+      'Failed to check ownership for non-owner'
+    );
+    expect(isNotOwner).toBe(false);
   });
 
   test('isSafeDeployed is false before deployment', async () => {
-    const deployedRes = await suite.isSafeDeployed(
-      [account.address],
-      SALT_NONCE
-    );
-    await match(deployedRes, {
-      ok: ({ value }) => expect(value).toBe(false),
-      error: ({ error }) => {
-        throw new Error(error instanceof Error ? error.message : String(error));
-      },
-    });
+    const res = await suite.isSafeDeployed([account.address], SALT_NONCE);
+
+    if (res.status === 'error') {
+      throw new Error(`isSafeDeployed failed: ${String(res.error)}`);
+    }
+
+    expect(res.value).toBe(false);
   });
 
   test('getOwners errors if safe not deployed', async () => {
-    const ownersRes = await suite.getOwners(UNDEPLOYED_SAFE_ADDRESS);
-    await match(ownersRes, {
-      ok: () => {
-        throw new Error(
-          'Expected getOwners to error for non‑deployed Safe, but it succeeded'
-        );
-      },
-      error: ({ error }) => {
-        expect(String(error)).toMatch(
-          /returned no data|no code|call exception/i
-        );
-      },
-    });
+    const res = await suite.getOwners(UNDEPLOYED_SAFE_ADDRESS);
+
+    if (res.status === 'ok') {
+      throw new Error(
+        'Expected getOwners to error for non‑deployed Safe, but it succeeded'
+      );
+    }
+
+    expect(String(res.error)).toMatch(
+      /returned no data|no code|call exception/i
+    );
   });
 });
