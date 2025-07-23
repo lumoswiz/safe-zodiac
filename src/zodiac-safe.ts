@@ -53,6 +53,66 @@ export class ZodiacSafeSuite {
     this.rolesSuite = new ZodiacRolesSuite(publicClient);
   }
 
+  async execFullSetupTx(
+    safe: Address,
+    owner: Address,
+    safeNonce: bigint,
+    account: Account,
+    rolesSetup: PartialRolesSetupArgs = {},
+    rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
+    extraSetupTxs: MetaTransactionData[] = [],
+    extraMultisendTxs: MetaTransactionData[] = []
+  ): Promise<Result<Hex[]>> {
+    const client = this.safeSuite.client.extend(walletActions);
+
+    const buildResult = await this.buildAllTx(
+      safe,
+      owner,
+      safeNonce,
+      rolesSetup,
+      rolesNonce,
+      extraSetupTxs,
+      extraMultisendTxs
+    );
+    const unwrapped = unwrapOrFail(buildResult);
+    if (maybeError(unwrapped)) return { status: 'error', error: unwrapped };
+    const { setupTxs, multisendTxs } = unwrapped;
+
+    const txHashes: Hex[] = [];
+
+    for (const tx of setupTxs) {
+      const hash = await client.sendTransaction({
+        account,
+        chain: null,
+        to: tx.to,
+        data: tx.data,
+        value: BigInt(tx.value),
+      });
+      await client.waitForTransactionReceipt({ hash });
+      txHashes.push(hash);
+    }
+
+    if (multisendTxs.length > 0) {
+      const signed = unwrapOrFail(
+        await this.signMultisendTx(safe, multisendTxs, account)
+      );
+      if (maybeError(signed)) return { status: 'error', error: signed };
+
+      const exec = await this.execTx(
+        safe,
+        signed.txData,
+        signed.signature,
+        account
+      );
+      const hash = unwrapOrFail(exec);
+      if (maybeError(hash)) return { status: 'error', error: hash };
+
+      txHashes.push(hash);
+    }
+
+    return { status: 'ok', value: txHashes };
+  }
+
   async buildAllTx(
     safe: Address,
     owner: Address,
@@ -241,25 +301,23 @@ export class ZodiacSafeSuite {
     txData: SafeTransactionData,
     signature: Hex,
     account: Account
-  ): Promise<Result<void>> {
+  ): Promise<Result<Hex>> {
     return match(
       await this.safeSuite.buildExecTransaction(safe, txData, signature),
       {
         ok: async ({ value: { to, data, value } }) => {
           try {
-            const hash = await this.safeSuite.client
-              .extend(walletActions)
-              .sendTransaction({
-                account,
-                chain: null,
-                to,
-                data,
-                value: BigInt(value),
-              });
+            const client = this.safeSuite.client.extend(walletActions);
+            const hash = await client.sendTransaction({
+              account,
+              chain: null,
+              to,
+              data,
+              value: BigInt(value),
+            });
 
-            await this.safeSuite.client.waitForTransactionReceipt({ hash });
-
-            return { status: 'ok', value: undefined };
+            await client.waitForTransactionReceipt({ hash });
+            return { status: 'ok', value: hash };
           } catch (error) {
             return { status: 'error', error };
           }
