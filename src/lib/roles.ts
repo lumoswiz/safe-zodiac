@@ -25,7 +25,7 @@ import type {
   ConditionFlat,
   ExecutionOptions,
 } from '../types';
-import { isContractDeployed, matchResult } from './utils';
+import { isContractDeployed, makeError, makeOk, matchResult } from './utils';
 
 export class ZodiacRolesSuite {
   client: PublicClient;
@@ -68,9 +68,9 @@ export class ZodiacRolesSuite {
         salt,
         bytecode,
       });
-      return { status: 'ok', value: address };
+      return makeOk(address);
     } catch (error) {
-      return { status: 'error', error };
+      return makeError(error);
     }
   }
 
