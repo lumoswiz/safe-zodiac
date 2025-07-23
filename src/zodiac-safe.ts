@@ -20,12 +20,10 @@ import {
   BuildTxBucketsResult,
   ExecutionOptions,
   RolesSetupArgs,
-  BuildSignSafeTx,
   RoleScope,
   SetupStage,
   PartialRolesSetupArgs,
   EnsureModuleEnabledResult,
-  IsModuleEnabledResult,
   SafeTransactionData,
 } from './types';
 import {
@@ -35,8 +33,6 @@ import {
   makeOk,
   match,
   matchResult,
-  maybeError,
-  unwrapOrFail,
 } from './lib/utils';
 import { generateSafeTypedData } from './lib/safe-eip712';
 import { encodeMulti } from './lib/multisend';
@@ -655,36 +651,27 @@ export class ZodiacSafeSuite {
     safe: Address,
     module: Address
   ): Promise<EnsureModuleEnabledResult> {
-    const enabledRes = await match<IsModuleEnabledResult, Result<boolean>>(
-      await this.safeSuite.isModuleEnabled(safe, module),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const enabledRes = await this.safeSuite.isModuleEnabled(safe, module);
 
-    const isEnabled = unwrapOrFail(enabledRes);
-    if (maybeError(isEnabled)) {
-      return { status: 'error', error: isEnabled };
-    }
+    const isEnabled = await matchResult(enabledRes, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
 
     if (isEnabled) {
-      return { status: 'ok', value: { metaTxs: [] } };
+      return makeOk({ metaTxs: [] });
     }
 
-    const buildRes = await match<BuildSignSafeTx, Result<MetaTransactionData>>(
-      await this.safeSuite.buildEnableModuleTx(safe, module),
-      {
-        ok: ({ value: { txData } }) => ({ status: 'ok', value: txData }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
-    );
+    const buildRes = await this.safeSuite.buildEnableModuleTx(safe, module);
 
-    const enableTx = unwrapOrFail(buildRes);
-    if (maybeError(enableTx)) {
-      return { status: 'error', error: enableTx };
-    }
+    const txResult = await matchResult(buildRes, {
+      ok: ({ value: { txData } }) => makeOk(txData),
+      error: ({ error }) => makeError(error),
+    });
 
-    return { status: 'ok', value: { metaTxs: [enableTx] } };
+    return matchResult(txResult, {
+      ok: ({ value }) => makeOk({ metaTxs: [value] }),
+      error: ({ error }) => makeError(error),
+    });
   }
 }
