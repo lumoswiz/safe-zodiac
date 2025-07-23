@@ -35,7 +35,10 @@ import {
 import {
   expectValue,
   isContractDeployed,
+  makeError,
+  makeOk,
   match,
+  matchResult,
   maybeError,
   unwrapOrFail,
 } from './lib/utils';
@@ -65,52 +68,71 @@ export class ZodiacSafeSuite {
   ): Promise<Result<Hex[]>> {
     const client = this.safeSuite.client.extend(walletActions);
 
-    const buildResult = await this.buildAllTx(
-      safe,
-      owner,
-      safeNonce,
-      rolesSetup,
-      rolesNonce,
-      extraSetupTxs,
-      extraMultisendTxs
-    );
-    const unwrapped = unwrapOrFail(buildResult);
-    if (maybeError(unwrapped)) return { status: 'error', error: unwrapped };
-    const { setupTxs, multisendTxs } = unwrapped;
-
-    const txHashes: Hex[] = [];
-
-    for (const tx of setupTxs) {
-      const hash = await client.sendTransaction({
-        account,
-        chain: null,
-        to: tx.to,
-        data: tx.data,
-        value: BigInt(tx.value),
-      });
-      await client.waitForTransactionReceipt({ hash });
-      txHashes.push(hash);
-    }
-
-    if (multisendTxs.length > 0) {
-      const signed = unwrapOrFail(
-        await this.signMultisendTx(safe, multisendTxs, account)
-      );
-      if (maybeError(signed)) return { status: 'error', error: signed };
-
-      const exec = await this.execTx(
+    return matchResult(
+      await this.buildAllTx(
         safe,
-        signed.txData,
-        signed.signature,
-        account
-      );
-      const hash = unwrapOrFail(exec);
-      if (maybeError(hash)) return { status: 'error', error: hash };
+        owner,
+        safeNonce,
+        rolesSetup,
+        rolesNonce,
+        extraSetupTxs,
+        extraMultisendTxs
+      ),
+      {
+        error: (err) => makeError(err.error),
 
-      txHashes.push(hash);
-    }
+        ok: async ({ value: { setupTxs, multisendTxs } }) => {
+          const txHashes: Hex[] = [];
 
-    return { status: 'ok', value: txHashes };
+          try {
+            for (const tx of setupTxs) {
+              const hash = await client.sendTransaction({
+                account,
+                chain: null,
+                to: tx.to,
+                data: tx.data,
+                value: BigInt(tx.value),
+              });
+              await client.waitForTransactionReceipt({ hash });
+              txHashes.push(hash);
+            }
+
+            if (multisendTxs.length > 0) {
+              const signedResult = await this.signMultisendTx(
+                safe,
+                multisendTxs,
+                account
+              );
+
+              return matchResult(signedResult, {
+                error: (err) => makeError(err.error),
+
+                ok: async ({ value: { txData, signature } }) => {
+                  const execResult = await this.execTx(
+                    safe,
+                    txData,
+                    signature,
+                    account
+                  );
+
+                  return matchResult(execResult, {
+                    error: (err) => makeError(err.error),
+                    ok: ({ value: hash }) => {
+                      txHashes.push(hash);
+                      return makeOk(txHashes);
+                    },
+                  });
+                },
+              });
+            }
+
+            return makeOk(txHashes);
+          } catch (err) {
+            return makeError(err);
+          }
+        },
+      }
+    );
   }
 
   async buildAllTx(
