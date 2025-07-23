@@ -11,14 +11,12 @@ import {
 import { SafeContractSuite } from './lib/safe';
 import { ZodiacRolesSuite } from './lib/roles';
 import {
-  GetOwnersResult,
   IsValidSafeResult,
   MetaTransactionData,
   Result,
   EnsureSafeResult,
   BuildTxResult,
   EnsureRolesResult,
-  IsModuleDeployedResult,
   CalculateModuleProxyAddressResult,
   BuildTxBucketsResult,
   ExecutionOptions,
@@ -424,47 +422,49 @@ export class ZodiacSafeSuite {
     safe: Address,
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE
   ): Promise<EnsureRolesResult> {
-    const addrRes = await match<
-      CalculateModuleProxyAddressResult,
-      Result<Address>
-    >(this.rolesSuite.calculateModuleProxyAddress(safe, rolesNonce), {
-      ok: ({ value }) => ({ status: 'ok', value }),
-      error: ({ error }) => ({ status: 'error', error }),
-    });
-
-    const rolesAddress = unwrapOrFail(addrRes);
-    if (maybeError(rolesAddress))
-      return { status: 'error', error: rolesAddress };
-
-    const deployedRes = await match<IsModuleDeployedResult, Result<boolean>>(
-      await this.rolesSuite.isModuleDeployed(safe, rolesNonce),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => ({ status: 'error', error }),
-      }
+    const addrResult = this.rolesSuite.calculateModuleProxyAddress(
+      safe,
+      rolesNonce
     );
 
-    const isDeployed = unwrapOrFail(deployedRes);
-    if (maybeError(isDeployed)) return { status: 'error', error: isDeployed };
-
-    if (isDeployed) {
-      return { status: 'ok', value: { rolesAddress, metaTxs: [] } };
-    }
-
-    const buildRes = await match<
-      BuildTxResult,
-      Result<MetaTransactionData | null>
-    >(await this.rolesSuite.buildDeployModuleTx(safe, rolesNonce), {
-      built: ({ tx }) => ({ status: 'ok', value: tx }),
-      skipped: () => ({ status: 'ok', value: null }),
-      error: ({ error }) => ({ status: 'error', error }),
+    const rolesAddress = await matchResult(addrResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
     });
 
-    const txOrNull = unwrapOrFail(buildRes);
-    if (maybeError(txOrNull)) return { status: 'error', error: txOrNull };
+    const deployedResult = await this.rolesSuite.isModuleDeployed(
+      safe,
+      rolesNonce
+    );
 
-    const metaTxs = txOrNull ? [txOrNull] : [];
-    return { status: 'ok', value: { rolesAddress, metaTxs } };
+    const isDeployed = await matchResult(deployedResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
+    });
+
+    if (isDeployed) {
+      return makeOk({ rolesAddress, metaTxs: [] });
+    }
+
+    const buildRes = await this.rolesSuite.buildDeployModuleTx(
+      safe,
+      rolesNonce
+    );
+
+    const deployResult = await match<
+      BuildTxResult,
+      Result<MetaTransactionData | null>
+    >(buildRes, {
+      built: ({ tx }) => makeOk(tx),
+      skipped: () => makeOk(null),
+      error: ({ error }) => makeError(error),
+    });
+
+    return matchResult(deployResult, {
+      ok: ({ value }) =>
+        makeOk({ rolesAddress, metaTxs: value ? [value] : [] }),
+      error: ({ error }) => makeError(error),
+    });
   }
 
   private async buildInitialSetupTxs(
