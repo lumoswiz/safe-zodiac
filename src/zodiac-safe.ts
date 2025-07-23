@@ -359,26 +359,20 @@ export class ZodiacSafeSuite {
     owner: Address,
     safeNonce: bigint
   ): Promise<EnsureSafeResult> {
-    const validityRes = await match<IsValidSafeResult, Result<boolean>>(
-      await this.isValidSafe(safe, owner),
-      {
-        ok: ({ value }) => ({ status: 'ok', value }),
-        error: ({ error }) => {
-          if (
-            error instanceof ContractFunctionRevertedError ||
-            error instanceof ContractFunctionExecutionError
-          ) {
-            return { status: 'ok', value: false };
-          }
-          return { status: 'error', error };
-        },
-      }
-    );
+    const isValidResult = await this.isValidSafe(safe, owner);
 
-    const isValid = unwrapOrFail(validityRes);
-    if (maybeError(isValid)) {
-      return { status: 'error', error: isValid };
-    }
+    const isValid = await matchResult(isValidResult, {
+      ok: ({ value }) => value,
+      error: ({ error }) => {
+        if (
+          error instanceof ContractFunctionRevertedError ||
+          error instanceof ContractFunctionExecutionError
+        ) {
+          return false;
+        }
+        return Promise.reject(error);
+      },
+    });
 
     if (!isValid) {
       const deployRes = await this.safeSuite.buildSafeDeploymentTx(
@@ -386,24 +380,26 @@ export class ZodiacSafeSuite {
         safeNonce
       );
 
-      const errOrTx = await match<
+      const buildRes = await match<
         BuildTxResult,
-        null | MetaTransactionData | unknown
+        Result<MetaTransactionData | null>
       >(deployRes, {
-        built: ({ tx }) => tx,
-        skipped: () => null,
-        error: ({ error }) => error,
+        built: ({ tx }) => makeOk(tx),
+        skipped: () => makeOk(null),
+        error: ({ error }) => makeError(error),
       });
 
-      if (errOrTx && typeof errOrTx !== 'object') {
-        return { status: 'error', error: errOrTx };
-      }
-
-      const metaTxs = errOrTx ? [errOrTx as MetaTransactionData] : [];
-      return { status: 'ok', value: { safeAddress: safe, metaTxs } };
+      return matchResult(buildRes, {
+        ok: ({ value }) =>
+          makeOk({
+            safeAddress: safe,
+            metaTxs: value ? [value] : [],
+          }),
+        error: ({ error }) => makeError(error),
+      });
     }
 
-    return { status: 'ok', value: { safeAddress: safe, metaTxs: [] } };
+    return makeOk({ safeAddress: safe, metaTxs: [] });
   }
 
   private async isValidSafe(
