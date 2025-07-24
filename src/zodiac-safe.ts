@@ -293,23 +293,6 @@ export class ZodiacSafeSuite {
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const startStage = SetupStage.DeployModule;
-
-    const extra = await this.buildInitialSetupTxs(
-      safeAddress,
-      owner,
-      saltNonce ?? 0n, // used to calculate deterministic module address
-      rolesNonce,
-      rolesSetup,
-      startStage,
-      extraSetupTxs,
-      extraMultisendTxs
-    );
-
-    setupTxs.push(...extra.setupTxs);
-    multisendTxs.push(...extra.multisendTxs);
-
-    // Roles deployment
     const rolesRes = await this.ensureRolesModule(safeAddress, rolesNonce);
     const { rolesAddress, metaTxs: rolesTxs } = await matchResult(rolesRes, {
       ok: ({ value }) => value,
