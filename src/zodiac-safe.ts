@@ -26,6 +26,7 @@ import {
   RolesSetupConfig,
   TxBuildOptions,
   BuildInitialSetupArgs,
+  PartialRolesSetupArgs,
 } from './types';
 import {
   extractOptionalMetaTx,
@@ -504,6 +505,28 @@ export class ZodiacSafeSuite {
     });
   }
 
+  private validateSetupArgs(
+    startAt: SetupStage,
+    setup?: PartialRolesSetupArgs
+  ) {
+    if (startAt <= SetupStage.ScopeFunctions && !setup) {
+      throw new Error('Missing rolesSetup');
+    }
+
+    if (startAt <= SetupStage.AssignRoles) {
+      if (!setup?.member) throw new Error('AssignRoles requires `member`');
+      if (!setup?.roleKey) throw new Error('AssignRoles requires `roleKey`');
+    }
+
+    if (startAt <= SetupStage.ScopeTarget) {
+      if (!setup?.target) throw new Error('ScopeTarget requires `target`');
+    }
+
+    if (startAt <= SetupStage.ScopeFunctions) {
+      if (!setup?.scopes) throw new Error('ScopeFunctions requires `scopes`');
+    }
+  }
+
   private async buildInitialSetupTxs(args: BuildInitialSetupArgs): Promise<{
     setupTxs: MetaTransactionData[];
     multisendTxs: MetaTransactionData[];
@@ -511,6 +534,7 @@ export class ZodiacSafeSuite {
     const rolesNonce =
       args.config.rolesNonce ?? ZodiacSafeSuite.DEFAULT_ROLES_NONCE;
     const rolesSetup = args.config.rolesSetup;
+    this.validateSetupArgs(args.startAt, rolesSetup);
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
