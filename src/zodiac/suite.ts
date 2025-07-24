@@ -1,4 +1,4 @@
-import { Hex, PublicClient } from 'viem';
+import { Address, Hex, PublicClient } from 'viem';
 import { RolesSuite } from '../roles/suite';
 import {
   Result,
@@ -27,6 +27,26 @@ export class ZodiacSuite {
       [ExecutionMode.SendTransactions]: (txs, account) =>
         execWithSendTransactions(this.safeSuite, txs, account),
     };
+  }
+
+  async getPredictedSafeAddress(
+    owner: Address,
+    saltNonce: bigint
+  ): Promise<Address> {
+    const result = await this.safeSuite.calculateSafeAddress(
+      [owner],
+      saltNonce
+    );
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => {
+        throw new Error(
+          `Failed to calculate predicted Safe address: ${
+            typeof error === 'string' ? error : String(error)
+          }`
+        );
+      },
+    });
   }
 
   async execFullSetupTx({
