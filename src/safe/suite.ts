@@ -11,17 +11,11 @@ import {
   type PublicClient,
 } from 'viem';
 import {
-  CHAINS,
   SAFE_PROXY_FACTORY,
   SAFE_SINGLETON,
   SAFE_VERSIONS,
   ZERO_ADDRESS,
 } from './constants';
-import {
-  SAFE_PROXY_ABI,
-  SAFE_PROXY_FACTORY_ABI,
-  SAFE_SINGLETON_ABI,
-} from './abi';
 import {
   type GetNonceResult,
   type GetThresholdResult,
@@ -50,8 +44,14 @@ import {
   makeOk,
   matchResult,
   toMetaTx,
-} from './utils';
-import { generateSafeTypedData } from './safe-eip712';
+} from '../shared/utils';
+import { generateSafeTypedData } from './eip712';
+import {
+  SAFE_PROXY_ABI,
+  SAFE_PROXY_FACTORY_ABI,
+  SAFE_SINGLETON_ABI,
+} from './abi';
+import { CHAINS } from '../shared/constants';
 
 export class SafeSuite {
   client: PublicClient;

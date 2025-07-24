@@ -6,7 +6,7 @@ import {
   RawSubgraphRole,
   SubgraphRole,
 } from '../types';
-import { CHAINS } from './constants';
+import { CHAINS } from '../shared/constants';
 
 export type FetchOptions = Omit<RequestInit, 'method' | 'body'>;
 

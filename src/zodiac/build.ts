@@ -19,8 +19,8 @@ import {
   makeError,
   makeOk,
   matchResult,
-} from '../lib/utils';
-import { SafeSuite } from '../lib/safe';
+} from '../shared/utils';
+import { SafeSuite } from '../safe';
 import { RolesSuite } from '../lib/roles';
 import { DEFAULT_ROLES_NONCE } from './constants';
 

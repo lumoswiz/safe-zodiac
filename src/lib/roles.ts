@@ -15,7 +15,7 @@ import {
   PROXY_BYTECODE_PREFIX,
   PROXY_BYTECODE_SUFFIX,
   ROLES_V2_MODULE_MASTERCOPY,
-} from './constants';
+} from '../shared/constants';
 import type {
   BuildMetaTxResult,
   BuildTxResult,
@@ -31,7 +31,7 @@ import {
   makeOk,
   matchResult,
   toMetaTx,
-} from './utils';
+} from '../shared/utils';
 
 export class RolesSuite {
   client: PublicClient;

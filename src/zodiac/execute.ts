@@ -5,8 +5,8 @@ import {
   MetaTransactionData,
   Result,
 } from '../types';
-import { SafeSuite } from '../lib/safe';
-import { makeError, makeOk } from '../lib/utils';
+import { SafeSuite } from '../safe';
+import { makeError, makeOk } from '../shared/utils';
 
 export async function execWithMode(
   txs: MetaTransactionData[],
