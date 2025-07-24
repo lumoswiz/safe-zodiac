@@ -1,1 +1,1 @@
-export { ZodiacSafeSuite } from './zodiac/suite';
+export { ZodiacSuite } from './zodiac/suite';

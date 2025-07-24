@@ -1,10 +1,10 @@
 import { Address, isAddressEqual } from 'viem';
 import { ResolvedSafeContext, Result } from '../types';
-import { SafeContractSuite } from '../lib/safe';
+import { SafeSuite } from '../lib/safe';
 import { makeError, makeOk, matchResult } from '../lib/utils';
 
 export async function resolveSafeContext(
-  safeSuite: SafeContractSuite,
+  safeSuite: SafeSuite,
   safe: Address,
   owner: Address,
   maybeSaltNonce: bigint | undefined

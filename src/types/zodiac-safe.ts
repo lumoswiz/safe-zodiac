@@ -1,6 +1,8 @@
 import { Account, Address } from 'viem';
 import { PartialRolesSetupArgs } from './roles';
 import { MetaTransactionData } from './safe';
+import { SafeSuite } from '../lib/safe';
+import { RolesSuite } from '../lib/roles';
 
 export enum SetupStage {
   DeploySafe,
@@ -31,6 +33,8 @@ export interface TxBuildOptions {
 }
 
 export interface BuildInitialSetupArgs {
+  safeSuite: SafeSuite;
+  rolesSuite: RolesSuite;
   safeAddress: Address;
   safeNonce: bigint;
   owner: Address;
