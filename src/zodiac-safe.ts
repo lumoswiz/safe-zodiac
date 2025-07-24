@@ -27,6 +27,7 @@ import {
   TxBuildOptions,
   BuildInitialSetupArgs,
   PartialRolesSetupArgs,
+  ExecFullSetupTxArgs,
 } from './types';
 import {
   extractOptionalMetaTx,
@@ -56,14 +57,14 @@ export class ZodiacSafeSuite {
     this.rolesSuite = new ZodiacRolesSuite(publicClient);
   }
 
-  async execFullSetupTx(
-    safe: Address,
-    account: Account,
-    maybeSaltNonce?: bigint,
-    config: RolesSetupConfig = {},
-    options: TxBuildOptions = {},
-    executionMode: ExecutionMode = ExecutionMode.SendTransactions
-  ): Promise<Result<Hex[]>> {
+  async execFullSetupTx({
+    safe,
+    account,
+    maybeSaltNonce,
+    config = {},
+    options = {},
+    executionMode = ExecutionMode.SendTransactions,
+  }: ExecFullSetupTxArgs): Promise<Result<Hex[]>> {
     const contextResult = await this.resolveSafeContext(
       safe,
       account.address,
