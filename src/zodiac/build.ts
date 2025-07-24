@@ -21,7 +21,7 @@ import {
   matchResult,
 } from '../shared/utils';
 import { SafeSuite } from '../safe';
-import { RolesSuite } from '../lib/roles';
+import { RolesSuite } from '../roles/roles';
 import { DEFAULT_ROLES_NONCE } from './constants';
 
 export async function buildAllTx(

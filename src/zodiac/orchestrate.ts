@@ -11,7 +11,7 @@ import {
 import { matchResult, makeError, makeOk } from '../shared/utils';
 
 import { execWithMode } from './execute';
-import { RolesSuite } from '../lib/roles';
+import { RolesSuite } from '../roles/roles';
 import { buildAllTx } from './build';
 import { buildMultisendExecMetaTx } from './meta';
 
