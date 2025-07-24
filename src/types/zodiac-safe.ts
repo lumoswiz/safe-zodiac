@@ -1,8 +1,9 @@
-import { Account, Address } from 'viem';
+import { Account, Address, Hex } from 'viem';
 import { PartialRolesSetupArgs } from './roles';
 import { MetaTransactionData } from './safe';
 import { SafeSuite } from '../lib/safe';
 import { RolesSuite } from '../lib/roles';
+import { Result } from './result';
 
 export enum SetupStage {
   DeploySafe,
@@ -17,6 +18,13 @@ export enum ExecutionMode {
   SendTransactions = 'legacy',
   SendCalls = 'eip5792',
 }
+
+export type ExecStrategy = (
+  txs: MetaTransactionData[],
+  account: Account
+) => Promise<Result<Hex[]>>;
+
+export type ExecStrategies = Record<ExecutionMode, ExecStrategy>;
 
 export type ResolvedSafeContext =
   | { safeAddress: Address; saltNonce: bigint; deployed: false }
