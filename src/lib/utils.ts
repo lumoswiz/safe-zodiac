@@ -43,7 +43,7 @@ export function makeOk<T, E = unknown>(value: T): Result<T, E> {
   return { status: 'ok', value };
 }
 
-export function makeError<T = unknown>(error: T): Result<never, T> {
+export function makeError<T>(error: unknown): Result<T, unknown> {
   return { status: 'error', error };
 }
 
@@ -95,14 +95,4 @@ export function extractOptionalMetaTx(
         return makeOptional();
     }
   });
-}
-
-export function formatError(err: unknown): string {
-  if (err instanceof Error) return err.stack ?? err.message;
-  if (typeof err === 'string') return err;
-  try {
-    return JSON.stringify(err, null, 2);
-  } catch {
-    return String(err);
-  }
 }
