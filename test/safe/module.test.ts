@@ -1,14 +1,14 @@
 import '../setup';
 import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { SafeContractSuite } from '../../src/lib/safe';
+import { SafeSuite } from '../../src';
 import { account, DUMMY_MODULE, SENTINEL_ADDRESS } from '../src/constants';
 import { signAndExec, expectOk, deploySafe } from '../utils';
 import { Address, createPublicClient, http, PublicClient } from 'viem';
 import { foundry } from 'viem/chains';
 
 describe('Safe Modules', () => {
-  let suite: SafeContractSuite;
+  let suite: SafeSuite;
   let publicClient: PublicClient;
   let DEPLOYED_SAFE_ADDRESS: Address;
 
@@ -17,7 +17,7 @@ describe('Safe Modules', () => {
       chain: foundry,
       transport: http(testConfig.rpcUrl),
     });
-    suite = new SafeContractSuite(publicClient);
+    suite = new SafeSuite(publicClient);
 
     ({ safeAddress: DEPLOYED_SAFE_ADDRESS, suite } = await deploySafe(
       publicClient

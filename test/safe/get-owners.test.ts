@@ -1,6 +1,6 @@
 import '../setup';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { SafeContractSuite } from '../../src/lib/safe';
+import { SafeSuite } from '../../src';
 import { account, SALT_NONCE } from '../src/constants';
 import { deploySafe, expectOk } from '../utils';
 import { Address, createPublicClient, PublicClient, http } from 'viem';
@@ -11,7 +11,7 @@ describe('Owner Helpers', () => {
   let DEPLOYED_SAFE_ADDRESS: Address;
   let UNDEPLOYED_SAFE_ADDRESS: Address;
   let publicClient: PublicClient;
-  let suite: SafeContractSuite;
+  let suite: SafeSuite;
 
   beforeEach(async () => {
     publicClient = createPublicClient({

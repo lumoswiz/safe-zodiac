@@ -1,7 +1,7 @@
 import '../setup';
 import { testConfig } from '../config';
 import { beforeEach, describe, expect, test } from 'bun:test';
-import { SafeContractSuite } from '../../src/lib/safe';
+import { SafeSuite } from '../../src';
 import { account, DEPLOYED_SALT_NONCE } from '../src/constants';
 import { expectOk } from '../utils';
 import { createPublicClient, http, PublicClient, walletActions } from 'viem';
@@ -18,7 +18,7 @@ describe('Safe Deployment', () => {
   });
 
   test('should deploy a Safe and verify its code', async () => {
-    const suite = new SafeContractSuite(publicClient);
+    const suite = new SafeSuite(publicClient);
 
     const safeAddress = expectOk(
       await suite.calculateSafeAddress([account.address], DEPLOYED_SALT_NONCE),
