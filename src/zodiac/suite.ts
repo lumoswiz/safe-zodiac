@@ -1,11 +1,4 @@
-import {
-  Account,
-  Address,
-  Hex,
-  isAddressEqual,
-  PublicClient,
-  walletActions,
-} from 'viem';
+import { Account, Address, Hex, PublicClient, walletActions } from 'viem';
 import { SafeContractSuite } from '../lib/safe';
 import { ZodiacRolesSuite } from '../lib/roles';
 import {
@@ -37,6 +30,7 @@ import {
 } from '../lib/utils';
 import { generateSafeTypedData } from '../lib/safe-eip712';
 import { encodeMulti } from '../lib/multisend';
+import { resolveSafeContext } from './context';
 
 export class ZodiacSafeSuite {
   readonly safeSuite: SafeContractSuite;
@@ -64,7 +58,8 @@ export class ZodiacSafeSuite {
     options = {},
     executionMode = ExecutionMode.SendTransactions,
   }: ExecFullSetupTxArgs): Promise<Result<Hex[]>> {
-    const contextResult = await this.resolveSafeContext(
+    const contextResult = await resolveSafeContext(
+      this.safeSuite,
       safe,
       account.address,
       maybeSaltNonce
@@ -135,57 +130,6 @@ export class ZodiacSafeSuite {
           },
         });
       },
-    });
-  }
-
-  private async resolveSafeContext(
-    safe: Address,
-    owner: Address,
-    maybeSaltNonce: bigint | undefined
-  ): Promise<Result<ResolvedSafeContext>> {
-    if (maybeSaltNonce !== undefined) {
-      const predictedRes = await this.safeSuite.calculateSafeAddress(
-        [owner],
-        maybeSaltNonce
-      );
-      return matchResult(predictedRes, {
-        ok: ({ value: predictedAddress }) => {
-          if (!isAddressEqual(predictedAddress, safe)) {
-            return makeError(
-              `Provided Safe address (${safe}) does not match predicted CREATE2 address (${predictedAddress})`
-            );
-          }
-          return makeOk({
-            safeAddress: predictedAddress,
-            saltNonce: maybeSaltNonce,
-            deployed: false,
-          });
-        },
-        error: ({ error }) => makeError(error),
-      });
-    }
-
-    const ownersResult = await this.safeSuite.getOwners(safe);
-    return matchResult(ownersResult, {
-      ok: ({ value: owners }) => {
-        const [onlyOwner] = owners;
-        if (
-          !onlyOwner ||
-          owners.length !== 1 ||
-          !isAddressEqual(onlyOwner, owner)
-        ) {
-          return makeError(
-            new Error('Safe is not a valid 1/1 owner configuration.')
-          );
-        }
-
-        return makeOk({
-          safeAddress: safe,
-          saltNonce: null,
-          deployed: true,
-        });
-      },
-      error: ({ error }) => makeError(error),
     });
   }
 
