@@ -1,5 +1,4 @@
 import { Hex, PublicClient } from 'viem';
-import { SafeSuite } from '../lib/safe';
 import { RolesSuite } from '../lib/roles';
 import {
   Result,
@@ -7,10 +6,11 @@ import {
   ExecFullSetupTxArgs,
   ExecStrategies,
 } from '../types';
-import { makeError, matchResult } from '../lib/utils';
+import { makeError, matchResult } from '../shared/utils';
 import { resolveSafeContext } from './context';
 import { orchestrateFullSetup } from './orchestrate';
 import { execWithSendCalls, execWithSendTransactions } from './execute';
+import { SafeSuite } from '../safe';
 
 export class ZodiacSuite {
   readonly safeSuite: SafeSuite;

@@ -1,5 +1,5 @@
 import { Account, Hex } from 'viem';
-import { SafeSuite } from '../lib/safe';
+import { SafeSuite } from '../safe';
 import {
   ExecStrategies,
   ExecutionMode,
@@ -8,7 +8,7 @@ import {
   RolesSetupConfig,
   TxBuildOptions,
 } from '../types';
-import { matchResult, makeError, makeOk } from '../lib/utils';
+import { matchResult, makeError, makeOk } from '../shared/utils';
 
 import { execWithMode } from './execute';
 import { RolesSuite } from '../lib/roles';

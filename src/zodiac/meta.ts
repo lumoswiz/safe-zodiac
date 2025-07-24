@@ -1,7 +1,7 @@
 import { Account, Hex } from 'viem';
-import { SafeSuite } from '../lib/safe';
+import { SafeSuite } from '../safe';
 import { MetaTransactionData, Result } from '../types';
-import { matchResult, makeError, makeOk } from '../lib/utils';
+import { matchResult, makeError, makeOk } from '../shared/utils';
 import { signMultisendTx } from './signing';
 import { OperationType } from '../types';
 

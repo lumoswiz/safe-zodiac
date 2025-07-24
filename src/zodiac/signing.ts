@@ -5,10 +5,8 @@ import {
   SAFE_VERSION_FALLBACK,
   SafeTransactionData,
 } from '../types';
-import { encodeMulti } from '../lib/multisend';
-import { makeError, makeOk, matchResult } from '../lib/utils';
-import { generateSafeTypedData } from '../lib/safe-eip712';
-import { SafeSuite } from '../lib/safe';
+import { makeError, makeOk, matchResult } from '../shared/utils';
+import { encodeMulti, generateSafeTypedData, SafeSuite } from '../safe';
 
 export async function signTx(
   safeSuite: SafeSuite,

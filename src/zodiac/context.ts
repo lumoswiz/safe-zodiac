@@ -1,7 +1,7 @@
 import { Address, isAddressEqual } from 'viem';
 import { ResolvedSafeContext, Result } from '../types';
-import { SafeSuite } from '../lib/safe';
-import { makeError, makeOk, matchResult } from '../lib/utils';
+import { SafeSuite } from '../safe';
+import { makeError, makeOk, matchResult } from '../shared/utils';
 
 export async function resolveSafeContext(
   safeSuite: SafeSuite,
