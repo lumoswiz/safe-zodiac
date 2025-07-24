@@ -1,5 +1,5 @@
 import { Hex, PublicClient } from 'viem';
-import { RolesSuite } from '../lib/roles';
+import { RolesSuite } from '../roles/roles';
 import {
   Result,
   ExecutionMode,

@@ -2,7 +2,7 @@ import { Account, Address, Hex } from 'viem';
 import { PartialRolesSetupArgs } from './roles';
 import { MetaTransactionData } from './safe';
 import { SafeSuite } from '../safe/suite';
-import { RolesSuite } from '../lib/roles';
+import { RolesSuite } from '../roles/roles';
 import { Result } from './result';
 
 export enum SetupStage {

@@ -15,7 +15,8 @@ import {
   PROXY_BYTECODE_PREFIX,
   PROXY_BYTECODE_SUFFIX,
   ROLES_V2_MODULE_MASTERCOPY,
-} from '../shared/constants';
+} from './constants';
+import {} from '../shared/constants';
 import type {
   BuildMetaTxResult,
   BuildTxResult,
