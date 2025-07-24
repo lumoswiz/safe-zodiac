@@ -1,8 +1,6 @@
 import {
   Account,
   Address,
-  ContractFunctionExecutionError,
-  ContractFunctionRevertedError,
   Hex,
   isAddressEqual,
   PublicClient,
@@ -11,10 +9,8 @@ import {
 import { SafeContractSuite } from './lib/safe';
 import { ZodiacRolesSuite } from './lib/roles';
 import {
-  IsValidSafeResult,
   MetaTransactionData,
   Result,
-  EnsureSafeResult,
   EnsureRolesResult,
   BuildTxBucketsResult,
   ExecutionOptions,
@@ -27,10 +23,11 @@ import {
   SAFE_VERSION_FALLBACK,
   ExecutionMode,
   OperationType,
+  ResolvedSafeContext,
 } from './types';
 import {
   extractOptionalMetaTx,
-  isContractDeployed,
+  formatError,
   makeError,
   makeOk,
   matchResult,
@@ -58,82 +55,149 @@ export class ZodiacSafeSuite {
 
   async execFullSetupTx(
     safe: Address,
-    owner: Address,
-    safeNonce: bigint,
     account: Account,
+    maybeSaltNonce: bigint | undefined,
     rolesSetup: PartialRolesSetupArgs = {},
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
     extraSetupTxs: MetaTransactionData[] = [],
     extraMultisendTxs: MetaTransactionData[] = [],
     executionMode: ExecutionMode = ExecutionMode.SendTransactions
   ): Promise<Result<Hex[]>> {
-    const client = this.safeSuite.client.extend(walletActions);
-    const safeDeployed = await isContractDeployed(client, safe);
+    const contextResult = await this.resolveSafeContext(
+      safe,
+      account.address,
+      maybeSaltNonce
+    );
 
-    return matchResult(
-      await this.buildAllTx(
-        safe,
-        owner,
-        safeNonce,
-        safeDeployed,
-        rolesSetup,
-        rolesNonce,
-        extraSetupTxs,
-        extraMultisendTxs
-      ),
-      {
-        error: (err) => makeError(err.error),
+    return matchResult(contextResult, {
+      error: ({ error }) =>
+        makeError(`Failed to resolve Safe context:\n${formatError(error)}`),
 
-        ok: async ({ value: { setupTxs, multisendTxs } }) => {
-          try {
-            if (multisendTxs.length > 0) {
-              const signedResult = await this.signMultisendTx(
-                safe,
-                multisendTxs,
+      ok: async ({ value: context }) => {
+        const { safeAddress, deployed } = context;
+
+        const txBucketsResult = await this.buildAllTx(
+          context,
+          account.address,
+          rolesSetup,
+          rolesNonce,
+          extraSetupTxs,
+          extraMultisendTxs
+        );
+
+        return matchResult(txBucketsResult, {
+          error: ({ error }) =>
+            makeError(
+              `Failed to build setup transactions:\n${formatError(error)}`
+            ),
+
+          ok: async ({ value: { setupTxs, multisendTxs } }) => {
+            try {
+              if (multisendTxs.length > 0) {
+                const signedResult = await this.signMultisendTx(
+                  safeAddress,
+                  multisendTxs,
+                  account,
+                  deployed
+                );
+
+                const execMetaTx = await matchResult(signedResult, {
+                  error: ({ error }) => Promise.reject(error),
+                  ok: async ({ value: { txData, signature } }) => {
+                    const execResult =
+                      await this.safeSuite.buildExecTransaction(
+                        safeAddress,
+                        txData,
+                        signature
+                      );
+
+                    return matchResult(execResult, {
+                      ok: ({ value: { to, data, value } }) => ({
+                        to,
+                        data,
+                        value,
+                        operation: OperationType.DelegateCall,
+                      }),
+                      error: ({ error }) => Promise.reject(error),
+                    });
+                  },
+                });
+
+                setupTxs.push(execMetaTx);
+              }
+
+              const execResult = await this.execWithMode(
+                setupTxs,
                 account,
-                safeDeployed
+                executionMode
               );
 
-              const execMetaTx = await matchResult(signedResult, {
-                error: ({ error }) => Promise.reject(error),
-                ok: async ({ value: { txData, signature } }) => {
-                  const execResult = await this.safeSuite.buildExecTransaction(
-                    safe,
-                    txData,
-                    signature
-                  );
-
-                  return matchResult(execResult, {
-                    ok: ({ value: { to, data, value } }) => ({
-                      to,
-                      data,
-                      value,
-                      operation: OperationType.DelegateCall,
-                    }),
-                    error: ({ error }) => Promise.reject(error),
-                  });
-                },
+              return matchResult(execResult, {
+                ok: ({ value }) => makeOk(value),
+                error: ({ error }) => makeError(error),
               });
-
-              setupTxs.push(execMetaTx);
+            } catch (err) {
+              return makeError(
+                `Unexpected error during setup execution:\n${formatError(err)}`
+              );
             }
+          },
+        });
+      },
+    });
+  }
 
-            const execResult = await this.execWithMode(
-              setupTxs,
-              account,
-              executionMode
+  private async resolveSafeContext(
+    safe: Address,
+    owner: Address,
+    maybeSaltNonce: bigint | undefined
+  ): Promise<Result<ResolvedSafeContext, string>> {
+    if (maybeSaltNonce !== undefined) {
+      const predictedRes = await this.safeSuite.calculateSafeAddress(
+        [owner],
+        maybeSaltNonce
+      );
+      return matchResult(predictedRes, {
+        ok: ({ value: predictedAddress }) => {
+          if (!isAddressEqual(predictedAddress, safe)) {
+            return makeError(
+              `Provided Safe address (${safe}) does not match predicted CREATE2 address (${predictedAddress})`
             );
-
-            return matchResult(execResult, {
-              ok: ({ value }) => makeOk(value),
-              error: ({ error }) => makeError(error),
-            });
-          } catch (err) {
-            return makeError(err);
           }
+          return makeOk({
+            safeAddress: predictedAddress,
+            saltNonce: maybeSaltNonce,
+            deployed: false,
+          });
         },
-      }
-    );
+        error: ({ error }) =>
+          makeError(
+            `Failed to calculate predicted Safe address:\n${formatError(error)}`
+          ),
+      });
+    }
+
+    const ownersResult = await this.safeSuite.getOwners(safe);
+    return matchResult(ownersResult, {
+      ok: ({ value: owners }) => {
+        const [onlyOwner] = owners;
+        if (
+          !onlyOwner ||
+          owners.length !== 1 ||
+          !isAddressEqual(onlyOwner, owner)
+        ) {
+          return makeError('Safe is not a valid 1/1 owner configuration.');
+        }
+
+        return makeOk({
+          safeAddress: safe,
+          saltNonce: null,
+          deployed: true,
+        });
+      },
+      error: ({ error }) =>
+        makeError(`Failed to validate Safe ownership:\n${formatError(error)}`),
+    });
   }
 
   private async execWithMode(
@@ -170,7 +234,7 @@ export class ZodiacSafeSuite {
 
       return makeOk(txHashes);
     } catch (error) {
-      return makeError(error);
+      return makeError(`Failed to send transaction:\n${formatError(error)}`);
     }
   }
 
@@ -194,25 +258,29 @@ export class ZodiacSafeSuite {
 
       return makeOk([id as Hex]);
     } catch (error) {
-      return makeError(error);
+      return makeError(`Failed to send batch calls:\n${formatError(error)}`);
     }
   }
 
   async buildAllTx(
-    safe: Address,
+    context: ResolvedSafeContext,
     owner: Address,
-    safeNonce: bigint,
-    safeDeployed: boolean,
     rolesSetup: PartialRolesSetupArgs = {},
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
     extraSetupTxs: MetaTransactionData[] = [],
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
-    if (!safeDeployed) {
+    const { safeAddress, saltNonce, deployed } = context;
+
+    if (!deployed) {
+      if (saltNonce === null) {
+        return makeError('Missing saltNonce for undeployed Safe');
+      }
+
       const allBuckets = await this.buildInitialSetupTxs(
-        safe,
+        safeAddress,
         owner,
-        safeNonce,
+        saltNonce,
         rolesNonce,
         rolesSetup,
         SetupStage.DeploySafe,
@@ -222,22 +290,15 @@ export class ZodiacSafeSuite {
       return makeOk(allBuckets);
     }
 
-    const safeRes = await this.ensureSingleOwnerSafe(safe, owner, safeNonce);
-    const { safeAddress, metaTxs: safeTxs } = await matchResult(safeRes, {
-      ok: ({ value }) => value,
-      error: ({ error }) => Promise.reject(error),
-    });
-
-    const setupTxs: MetaTransactionData[] = [...safeTxs];
+    const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
-    const startStage =
-      safeTxs.length > 0 ? SetupStage.DeploySafe : SetupStage.DeployModule;
+    const startStage = SetupStage.DeployModule;
 
     const extra = await this.buildInitialSetupTxs(
       safeAddress,
       owner,
-      safeNonce,
+      saltNonce ?? 0n, // used to calculate deterministic module address
       rolesNonce,
       rolesSetup,
       startStage,
@@ -248,10 +309,7 @@ export class ZodiacSafeSuite {
     setupTxs.push(...extra.setupTxs);
     multisendTxs.push(...extra.multisendTxs);
 
-    if (startStage === SetupStage.DeploySafe) {
-      return makeOk({ setupTxs, multisendTxs });
-    }
-
+    // Roles deployment
     const rolesRes = await this.ensureRolesModule(safeAddress, rolesNonce);
     const { rolesAddress, metaTxs: rolesTxs } = await matchResult(rolesRes, {
       ok: ({ value }) => value,
@@ -264,7 +322,7 @@ export class ZodiacSafeSuite {
       const extra = await this.buildInitialSetupTxs(
         safeAddress,
         owner,
-        safeNonce,
+        saltNonce ?? 0n,
         rolesNonce,
         rolesSetup,
         SetupStage.EnableModule,
@@ -282,14 +340,13 @@ export class ZodiacSafeSuite {
       error: ({ error }) => Promise.reject(error),
     });
 
-    const enableTxs = enableVal.metaTxs;
-    multisendTxs.push(...enableTxs);
+    multisendTxs.push(...enableVal.metaTxs);
 
-    if (enableTxs.length > 0) {
+    if (enableVal.metaTxs.length > 0) {
       const extra = await this.buildInitialSetupTxs(
         safeAddress,
         owner,
-        safeNonce,
+        saltNonce ?? 0n,
         rolesNonce,
         rolesSetup,
         SetupStage.AssignRoles,
@@ -336,7 +393,7 @@ export class ZodiacSafeSuite {
 
           return makeOk(signature);
         } catch (error) {
-          return makeError(error);
+          return makeError(`Failed to sign tx:\n${formatError(error)}`);
         }
       },
     });
@@ -389,7 +446,9 @@ export class ZodiacSafeSuite {
 
           return makeOk({ txData, signature });
         } catch (error) {
-          return makeError(error);
+          return makeError(
+            `Failed to sign multisend transaction:\n${formatError(error)}`
+          );
         }
       },
     });
@@ -424,65 +483,11 @@ export class ZodiacSafeSuite {
           await client.waitForTransactionReceipt({ hash });
           return makeOk(hash);
         } catch (error) {
-          return makeError(error);
+          return makeError(
+            `Failed to execute transaction:\n${formatError(error)}`
+          );
         }
       },
-    });
-  }
-
-  private async ensureSingleOwnerSafe(
-    safe: Address,
-    owner: Address,
-    safeNonce: bigint
-  ): Promise<EnsureSafeResult> {
-    const isValidResult = await this.isValidSafe(safe, owner);
-
-    const isValid = await matchResult(isValidResult, {
-      ok: ({ value }) => value,
-      error: ({ error }) => {
-        if (
-          error instanceof ContractFunctionRevertedError ||
-          error instanceof ContractFunctionExecutionError
-        ) {
-          return false;
-        }
-        return Promise.reject(error);
-      },
-    });
-
-    if (!isValid) {
-      const buildRes = await extractOptionalMetaTx(
-        this.safeSuite.buildSafeDeploymentTx(owner, safeNonce)
-      );
-
-      return matchResult(buildRes, {
-        ok: ({ value }) =>
-          makeOk({
-            safeAddress: safe,
-            metaTxs: value ? [value] : [],
-          }),
-        error: ({ error }) => makeError(error),
-      });
-    }
-
-    return makeOk({ safeAddress: safe, metaTxs: [] });
-  }
-
-  private async isValidSafe(
-    safe: Address,
-    owner: Address
-  ): Promise<IsValidSafeResult> {
-    const ownersResult = await this.safeSuite.getOwners(safe);
-
-    return matchResult(ownersResult, {
-      ok: ({ value: owners }) => {
-        const [onlyOwner] = owners;
-        if (!onlyOwner || owners.length !== 1) {
-          return makeOk(false);
-        }
-        return makeOk(isAddressEqual(owner, onlyOwner));
-      },
-      error: ({ error }) => makeError(error),
     });
   }
 
