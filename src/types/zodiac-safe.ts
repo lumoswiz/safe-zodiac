@@ -16,11 +16,9 @@ export enum ExecutionMode {
   SendCalls = 'eip5792',
 }
 
-export type ResolvedSafeContext = {
-  safeAddress: Address;
-  saltNonce: bigint | null;
-  deployed: boolean;
-};
+export type ResolvedSafeContext =
+  | { safeAddress: Address; saltNonce: bigint; deployed: false }
+  | { safeAddress: Address; saltNonce: null; deployed: true };
 
 export interface RolesSetupConfig {
   rolesSetup?: PartialRolesSetupArgs;

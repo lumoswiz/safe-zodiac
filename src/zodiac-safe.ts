@@ -31,7 +31,6 @@ import {
 } from './types';
 import {
   extractOptionalMetaTx,
-  formatError,
   makeError,
   makeOk,
   matchResult,
@@ -72,8 +71,7 @@ export class ZodiacSafeSuite {
     );
 
     return matchResult(contextResult, {
-      error: ({ error }) =>
-        makeError(`Failed to resolve Safe context:\n${formatError(error)}`),
+      error: ({ error }) => makeError(error),
 
       ok: async ({ value: context }) => {
         const txBucketsResult = await this.buildAllTx(
@@ -84,10 +82,7 @@ export class ZodiacSafeSuite {
         );
 
         return matchResult(txBucketsResult, {
-          error: ({ error }) =>
-            makeError(
-              `Failed to build setup transactions:\n${formatError(error)}`
-            ),
+          error: ({ error }) => makeError(error),
 
           ok: async ({ value: { setupTxs, multisendTxs } }) => {
             try {
@@ -134,10 +129,8 @@ export class ZodiacSafeSuite {
                 ok: ({ value }) => makeOk(value),
                 error: ({ error }) => makeError(error),
               });
-            } catch (err) {
-              return makeError(
-                `Unexpected error during setup execution:\n${formatError(err)}`
-              );
+            } catch (error) {
+              return makeError(error);
             }
           },
         });
@@ -149,7 +142,7 @@ export class ZodiacSafeSuite {
     safe: Address,
     owner: Address,
     maybeSaltNonce: bigint | undefined
-  ): Promise<Result<ResolvedSafeContext, string>> {
+  ): Promise<Result<ResolvedSafeContext>> {
     if (maybeSaltNonce !== undefined) {
       const predictedRes = await this.safeSuite.calculateSafeAddress(
         [owner],
@@ -168,10 +161,7 @@ export class ZodiacSafeSuite {
             deployed: false,
           });
         },
-        error: ({ error }) =>
-          makeError(
-            `Failed to calculate predicted Safe address:\n${formatError(error)}`
-          ),
+        error: ({ error }) => makeError(error),
       });
     }
 
@@ -184,7 +174,9 @@ export class ZodiacSafeSuite {
           owners.length !== 1 ||
           !isAddressEqual(onlyOwner, owner)
         ) {
-          return makeError('Safe is not a valid 1/1 owner configuration.');
+          return makeError(
+            new Error('Safe is not a valid 1/1 owner configuration.')
+          );
         }
 
         return makeOk({
@@ -193,8 +185,7 @@ export class ZodiacSafeSuite {
           deployed: true,
         });
       },
-      error: ({ error }) =>
-        makeError(`Failed to validate Safe ownership:\n${formatError(error)}`),
+      error: ({ error }) => makeError(error),
     });
   }
 
@@ -232,7 +223,7 @@ export class ZodiacSafeSuite {
 
       return makeOk(txHashes);
     } catch (error) {
-      return makeError(`Failed to send transaction:\n${formatError(error)}`);
+      return makeError(error);
     }
   }
 
@@ -256,7 +247,7 @@ export class ZodiacSafeSuite {
 
       return makeOk([id as Hex]);
     } catch (error) {
-      return makeError(`Failed to send batch calls:\n${formatError(error)}`);
+      return makeError(error);
     }
   }
 
@@ -270,9 +261,6 @@ export class ZodiacSafeSuite {
     const rolesNonce = config.rolesNonce ?? ZodiacSafeSuite.DEFAULT_ROLES_NONCE;
 
     if (!deployed) {
-      if (saltNonce === null)
-        return makeError('Missing saltNonce for undeployed Safe');
-
       const allBuckets = await this.buildInitialSetupTxs({
         safeAddress,
         owner,
@@ -369,7 +357,7 @@ export class ZodiacSafeSuite {
 
           return makeOk(signature);
         } catch (error) {
-          return makeError(`Failed to sign tx:\n${formatError(error)}`);
+          return makeError(error);
         }
       },
     });
@@ -422,9 +410,7 @@ export class ZodiacSafeSuite {
 
           return makeOk({ txData, signature });
         } catch (error) {
-          return makeError(
-            `Failed to sign multisend transaction:\n${formatError(error)}`
-          );
+          return makeError(error);
         }
       },
     });
@@ -459,9 +445,7 @@ export class ZodiacSafeSuite {
           await client.waitForTransactionReceipt({ hash });
           return makeOk(hash);
         } catch (error) {
-          return makeError(
-            `Failed to execute transaction:\n${formatError(error)}`
-          );
+          return makeError(error);
         }
       },
     });
@@ -732,7 +716,7 @@ export class ZodiacSafeSuite {
     });
 
     return matchResult(txResult, {
-      ok: ({ value }) => makeOk({ metaTxs: [value] }),
+      ok: ({ value }) => makeOk({ metaTxs: [value as MetaTransactionData] }),
       error: ({ error }) => makeError(error),
     });
   }

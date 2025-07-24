@@ -58,7 +58,7 @@ const getDecodedMessage = (message: string): string => {
 export function decodeSafeMessage(
   message: string | EIP712TypedData,
   safe: MinimalSafeInfo
-): Result<DecodedSafeMessage, string> {
+): Result<DecodedSafeMessage> {
   try {
     const decodedMessage =
       typeof message === 'string' ? getDecodedMessage(message) : message;
