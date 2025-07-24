@@ -14,6 +14,11 @@ export enum SetupStage {
   ScopeFunctions,
 }
 
+export enum ExecutionMode {
+  SendTransactions = 'legacy',
+  SendCalls = 'eip5792',
+}
+
 export * from './result';
 export * from './safe';
 export * from './roles';
