@@ -42,6 +42,7 @@ import {
   SafeTransactionDataResult,
   BuildSignSafeTx,
   MetaTransactionData,
+  SAFE_VERSION_FALLBACK,
 } from '../types';
 import {
   isContractDeployed,
@@ -440,9 +441,9 @@ export class SafeContractSuite {
     to: Address,
     data: Hex,
     operation: OperationType = OperationType.Call,
-    useOnChainNonce: boolean = true
+    isSafeDeployed: boolean = true
   ): Promise<SafeTransactionDataResult> {
-    const nonce = await this.resolveNonce(safe, useOnChainNonce);
+    const nonce = await this.resolveNonce(safe, isSafeDeployed);
 
     return makeOk({
       to,
@@ -476,35 +477,37 @@ export class SafeContractSuite {
     to: Address,
     data: Hex,
     operation: OperationType = OperationType.Call,
-    useOnChainNonce: boolean = true
+    isSafeDeployed: boolean = true
   ): Promise<BuildSignSafeTx> {
     const txResult = await this.buildSafeTransactionData(
       safe,
       to,
       data,
       operation,
-      useOnChainNonce
+      isSafeDeployed
     );
 
     return matchResult(txResult, {
       error: ({ error }) => makeError(error),
       ok: async ({ value: txData }) => {
-        const versionResult = await this.getVersion(safe);
-        return matchResult(versionResult, {
+        const version: SafeVersion = isSafeDeployed
+          ? await matchResult(await this.getVersion(safe), {
+              ok: ({ value }) => value,
+              error: () => SAFE_VERSION_FALLBACK,
+            })
+          : SAFE_VERSION_FALLBACK;
+
+        const chainId = await this.client.getChainId();
+        const hashResult = await this.getSafeTransactionHash(
+          safe,
+          txData,
+          version,
+          chainId
+        );
+
+        return matchResult(hashResult, {
+          ok: ({ value: safeTxHash }) => makeOk({ txData, safeTxHash }),
           error: ({ error }) => makeError(error),
-          ok: async ({ value: version }) => {
-            const chainId = await this.client.getChainId();
-            const hashResult = await this.getSafeTransactionHash(
-              safe,
-              txData,
-              version,
-              chainId
-            );
-            return matchResult(hashResult, {
-              ok: ({ value: safeTxHash }) => makeOk({ txData, safeTxHash }),
-              error: ({ error }) => makeError(error),
-            });
-          },
         });
       },
     });

@@ -24,9 +24,9 @@ import {
   PartialRolesSetupArgs,
   EnsureModuleEnabledResult,
   SafeTransactionData,
+  SAFE_VERSION_FALLBACK,
 } from './types';
 import {
-  expectValue,
   extractOptionalMetaTx,
   isContractDeployed,
   makeError,
@@ -58,12 +58,14 @@ export class ZodiacSafeSuite {
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<Result<Hex[]>> {
     const client = this.safeSuite.client.extend(walletActions);
+    const safeDeployed = await isContractDeployed(client, safe);
 
     return matchResult(
       await this.buildAllTx(
         safe,
         owner,
         safeNonce,
+        safeDeployed,
         rolesSetup,
         rolesNonce,
         extraSetupTxs,
@@ -130,14 +132,13 @@ export class ZodiacSafeSuite {
     safe: Address,
     owner: Address,
     safeNonce: bigint,
+    safeDeployed: boolean,
     rolesSetup: PartialRolesSetupArgs = {},
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
     extraSetupTxs: MetaTransactionData[] = [],
     extraMultisendTxs: MetaTransactionData[] = []
   ): Promise<BuildTxBucketsResult> {
-    const isDeployed = await isContractDeployed(this.safeSuite.client, safe);
-
-    if (!isDeployed) {
+    if (!safeDeployed) {
       const allBuckets = await this.buildInitialSetupTxs(
         safe,
         owner,
@@ -237,36 +238,45 @@ export class ZodiacSafeSuite {
     txData: SafeTransactionData,
     account: Account
   ): Promise<Result<Hex>> {
-    try {
-      const version = await expectValue(this.safeSuite.getVersion(safeAddress));
-      const chainId = await this.safeSuite.client.getChainId();
+    const versionResult = await this.safeSuite.getVersion(safeAddress);
 
-      const typedData = generateSafeTypedData({
-        safeAddress,
-        safeVersion: version,
-        chainId,
-        data: txData,
-      });
+    return matchResult(versionResult, {
+      error: ({ error }) => makeError(error),
 
-      const signature = await this.safeSuite.client
-        .extend(walletActions)
-        .signTypedData({
-          account,
-          domain: typedData.domain,
-          types: typedData.types,
-          primaryType: typedData.primaryType,
-          message: typedData.message,
-        });
+      ok: async ({ value: version }) => {
+        try {
+          const chainId = await this.safeSuite.client.getChainId();
 
-      return makeOk(signature);
-    } catch (error) {
-      return makeError(error);
-    }
+          const typedData = generateSafeTypedData({
+            safeAddress,
+            safeVersion: version,
+            chainId,
+            data: txData,
+          });
+
+          const signature = await this.safeSuite.client
+            .extend(walletActions)
+            .signTypedData({
+              account,
+              domain: typedData.domain,
+              types: typedData.types,
+              primaryType: typedData.primaryType,
+              message: typedData.message,
+            });
+
+          return makeOk(signature);
+        } catch (error) {
+          return makeError(error);
+        }
+      },
+    });
   }
+
   async signMultisendTx(
     safe: Address,
     multisendTxs: MetaTransactionData[],
-    account: Account
+    account: Account,
+    IsSafeDeployed: boolean = true
   ): Promise<Result<{ txData: SafeTransactionData; signature: Hex }>> {
     const multisendTx = encodeMulti(multisendTxs);
 
@@ -274,15 +284,20 @@ export class ZodiacSafeSuite {
       safe,
       multisendTx.to,
       multisendTx.data,
-      multisendTx.operation
+      multisendTx.operation,
+      IsSafeDeployed
     );
 
     return matchResult(signResult, {
       error: ({ error }) => makeError(error),
-
       ok: async ({ value: { txData } }) => {
         try {
-          const version = await expectValue(this.safeSuite.getVersion(safe));
+          const version = IsSafeDeployed
+            ? await matchResult(await this.safeSuite.getVersion(safe), {
+                ok: ({ value }) => value,
+                error: () => SAFE_VERSION_FALLBACK,
+              })
+            : SAFE_VERSION_FALLBACK;
           const chainId = await this.safeSuite.client.getChainId();
 
           const typedData = generateSafeTypedData({

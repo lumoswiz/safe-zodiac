@@ -39,13 +39,6 @@ export const maybeError = <T>(
 ): val is { _isError: true } =>
   !!val && typeof val === 'object' && '_isError' in val;
 
-export async function expectValue<T>(p: Promise<Result<T>>): Promise<T> {
-  const r = await p;
-  const v = unwrapOrFail(r);
-  if (maybeError(v)) throw v;
-  return v;
-}
-
 export function makeOk<T, E = unknown>(value: T): Result<T, E> {
   return { status: 'ok', value };
 }
