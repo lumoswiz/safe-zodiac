@@ -5,16 +5,14 @@ import {
   MetaTransactionData,
   Result,
   SafeTransactionData,
-  SAFE_VERSION_FALLBACK,
   ExecutionMode,
   OperationType,
   ExecFullSetupTxArgs,
 } from '../types';
 import { makeError, makeOk, matchResult } from '../lib/utils';
-import { generateSafeTypedData } from '../lib/safe-eip712';
-import { encodeMulti } from '../lib/multisend';
 import { resolveSafeContext } from './context';
 import { buildAllTx } from './build';
+import { signMultisendTx } from './signing';
 
 export class ZodiacSuite {
   readonly safeSuite: SafeSuite;
@@ -66,7 +64,8 @@ export class ZodiacSuite {
           ok: async ({ value: { setupTxs, multisendTxs } }) => {
             try {
               if (multisendTxs.length > 0) {
-                const signedResult = await this.signMultisendTx(
+                const signedResult = await signMultisendTx(
+                  this.safeSuite,
                   context.safeAddress,
                   multisendTxs,
                   account,
@@ -177,98 +176,6 @@ export class ZodiacSuite {
     } catch (error) {
       return makeError(error);
     }
-  }
-
-  async signTx(
-    safeAddress: Address,
-    txData: SafeTransactionData,
-    account: Account
-  ): Promise<Result<Hex>> {
-    const versionResult = await this.safeSuite.getVersion(safeAddress);
-
-    return matchResult(versionResult, {
-      error: ({ error }) => makeError(error),
-
-      ok: async ({ value: version }) => {
-        try {
-          const chainId = await this.safeSuite.client.getChainId();
-
-          const typedData = generateSafeTypedData({
-            safeAddress,
-            safeVersion: version,
-            chainId,
-            data: txData,
-          });
-
-          const signature = await this.safeSuite.client
-            .extend(walletActions)
-            .signTypedData({
-              account,
-              domain: typedData.domain,
-              types: typedData.types,
-              primaryType: typedData.primaryType,
-              message: typedData.message,
-            });
-
-          return makeOk(signature);
-        } catch (error) {
-          return makeError(error);
-        }
-      },
-    });
-  }
-
-  async signMultisendTx(
-    safe: Address,
-    multisendTxs: MetaTransactionData[],
-    account: Account,
-    IsSafeDeployed: boolean = true
-  ): Promise<Result<{ txData: SafeTransactionData; signature: Hex }>> {
-    const multisendTx = encodeMulti(multisendTxs);
-
-    const signResult = await this.safeSuite.buildSignSafeTx(
-      safe,
-      multisendTx.to,
-      multisendTx.data,
-      multisendTx.operation,
-      IsSafeDeployed
-    );
-
-    return matchResult(signResult, {
-      error: ({ error }) => makeError(error),
-      ok: async ({ value: { txData } }) => {
-        try {
-          const version = IsSafeDeployed
-            ? await matchResult(await this.safeSuite.getVersion(safe), {
-                ok: ({ value }) => value,
-                error: () => SAFE_VERSION_FALLBACK,
-              })
-            : SAFE_VERSION_FALLBACK;
-          const chainId = await this.safeSuite.client.getChainId();
-
-          const typedData = generateSafeTypedData({
-            safeAddress: safe,
-            safeVersion: version,
-            chainId,
-            data: txData,
-          });
-
-          const signature = await this.safeSuite.client
-            .extend(walletActions)
-            .signTypedData({
-              account,
-              domain: typedData.domain,
-              types: typedData.types,
-              primaryType: typedData.primaryType,
-              message: typedData.message,
-            });
-
-          return makeOk({ txData, signature });
-        } catch (error) {
-          return makeError(error);
-        }
-      },
-    });
   }
 
   async execTx(
