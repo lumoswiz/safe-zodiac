@@ -4,19 +4,13 @@ import { RolesSuite } from '../lib/roles';
 import {
   Result,
   ExecutionMode,
-  OperationType,
   ExecFullSetupTxArgs,
   ExecStrategies,
 } from '../types';
-import { makeError, makeOk, matchResult } from '../lib/utils';
+import { makeError, matchResult } from '../lib/utils';
 import { resolveSafeContext } from './context';
-import { buildAllTx } from './build';
-import { signMultisendTx } from './signing';
-import {
-  execWithMode,
-  execWithSendCalls,
-  execWithSendTransactions,
-} from './execute';
+import { orchestrateFullSetup } from './orchestrate';
+import { execWithSendCalls, execWithSendTransactions } from './execute';
 
 export class ZodiacSuite {
   readonly safeSuite: SafeSuite;
@@ -53,72 +47,17 @@ export class ZodiacSuite {
     return matchResult(contextResult, {
       error: ({ error }) => makeError(error),
 
-      ok: async ({ value: context }) => {
-        const txBucketsResult = await buildAllTx(
+      ok: ({ value: context }) =>
+        orchestrateFullSetup(
           this.safeSuite,
           this.rolesSuite,
           context,
-          account.address,
+          account,
           config,
-          options
-        );
-
-        return matchResult(txBucketsResult, {
-          error: ({ error }) => makeError(error),
-
-          ok: async ({ value: { setupTxs, multisendTxs } }) => {
-            try {
-              if (multisendTxs.length > 0) {
-                const signedResult = await signMultisendTx(
-                  this.safeSuite,
-                  context.safeAddress,
-                  multisendTxs,
-                  account,
-                  context.deployed
-                );
-
-                const execMetaTx = await matchResult(signedResult, {
-                  error: ({ error }) => Promise.reject(error),
-                  ok: async ({ value: { txData, signature } }) => {
-                    const execResult =
-                      await this.safeSuite.buildExecTransaction(
-                        context.safeAddress,
-                        txData,
-                        signature
-                      );
-
-                    return matchResult(execResult, {
-                      ok: ({ value: { to, data, value } }) => ({
-                        to,
-                        data,
-                        value,
-                        operation: OperationType.DelegateCall,
-                      }),
-                      error: ({ error }) => Promise.reject(error),
-                    });
-                  },
-                });
-
-                setupTxs.push(execMetaTx);
-              }
-
-              const execResult = await execWithMode(
-                setupTxs,
-                account,
-                executionMode,
-                this.execStrategies
-              );
-
-              return matchResult(execResult, {
-                ok: ({ value }) => makeOk(value),
-                error: ({ error }) => makeError(error),
-              });
-            } catch (error) {
-              return makeError(error);
-            }
-          },
-        });
-      },
+          options,
+          executionMode,
+          this.execStrategies
+        ),
     });
   }
 }
