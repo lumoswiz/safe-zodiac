@@ -4,12 +4,12 @@ import { deploySafe, deployRoles } from '../utils';
 import { Address, createPublicClient, PublicClient, http } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
-import { ZodiacRolesSuite } from '../../src/lib/roles';
+import { RolesSuite } from '../../src';
 
 describe('Roles Deployment', () => {
   let SAFE_ADDRESS: Address;
   let ROLES_ADDRESS: Address;
-  let rolesSuite: ZodiacRolesSuite;
+  let rolesSuite: RolesSuite;
   let publicClient: PublicClient;
 
   beforeEach(async () => {

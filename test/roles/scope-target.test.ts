@@ -11,15 +11,14 @@ import {
 } from 'viem';
 import { foundry } from 'viem/chains';
 import { testConfig } from '../config';
-import { ZodiacRolesSuite } from '../../src/lib/roles';
-import { SafeContractSuite } from '../../src/lib/safe';
+import { SafeSuite, RolesSuite } from '../../src';
 import { account, ROLE_KEY, ROLE_MEMBER, TARGET } from '../src/constants';
 
 describe('Scope Target', () => {
   let SAFE_ADDRESS: Address;
   let ROLES_ADDRESS: Address;
-  let safeSuite: SafeContractSuite;
-  let rolesSuite: ZodiacRolesSuite;
+  let safeSuite: SafeSuite;
+  let rolesSuite: RolesSuite;
   let publicClient: PublicClient;
 
   beforeEach(async () => {
