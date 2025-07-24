@@ -42,6 +42,7 @@ import {
   SafeTransactionDataResult,
   BuildSignSafeTx,
   MetaTransactionData,
+  SAFE_VERSION_FALLBACK,
 } from '../types';
 import {
   isContractDeployed,
@@ -439,25 +440,35 @@ export class SafeContractSuite {
     safe: Address,
     to: Address,
     data: Hex,
-    operation: OperationType = OperationType.Call
+    operation: OperationType = OperationType.Call,
+    isSafeDeployed: boolean = true
   ): Promise<SafeTransactionDataResult> {
-    const nonceResult = await this.getNonce(safe);
+    const nonce = await this.resolveNonce(safe, isSafeDeployed);
 
+    return makeOk({
+      to,
+      value: '0x0',
+      data,
+      operation,
+      safeTxGas: 0n,
+      baseGas: 0n,
+      gasPrice: 0n,
+      gasToken: ZERO_ADDRESS,
+      refundReceiver: ZERO_ADDRESS,
+      nonce,
+    });
+  }
+
+  private async resolveNonce(
+    safe: Address,
+    useOnChainNonce: boolean
+  ): Promise<bigint> {
+    if (!useOnChainNonce) return 0n;
+
+    const nonceResult = await this.getNonce(safe);
     return matchResult(nonceResult, {
-      ok: ({ value: nonce }) =>
-        makeOk({
-          to,
-          value: '0x0',
-          data,
-          operation,
-          safeTxGas: 0n,
-          baseGas: 0n,
-          gasPrice: 0n,
-          gasToken: ZERO_ADDRESS,
-          refundReceiver: ZERO_ADDRESS,
-          nonce,
-        }),
-      error: ({ error }) => makeError(error),
+      ok: ({ value }) => value,
+      error: ({ error }) => Promise.reject(error),
     });
   }
 
@@ -465,39 +476,38 @@ export class SafeContractSuite {
     safe: Address,
     to: Address,
     data: Hex,
-    operation: OperationType = OperationType.Call
+    operation: OperationType = OperationType.Call,
+    isSafeDeployed: boolean = true
   ): Promise<BuildSignSafeTx> {
     const txResult = await this.buildSafeTransactionData(
       safe,
       to,
       data,
-      operation
+      operation,
+      isSafeDeployed
     );
 
     return matchResult(txResult, {
       error: ({ error }) => makeError(error),
-
       ok: async ({ value: txData }) => {
-        const versionResult = await this.getVersion(safe);
+        const version: SafeVersion = isSafeDeployed
+          ? await matchResult(await this.getVersion(safe), {
+              ok: ({ value }) => value,
+              error: () => SAFE_VERSION_FALLBACK,
+            })
+          : SAFE_VERSION_FALLBACK;
 
-        return matchResult(versionResult, {
+        const chainId = await this.client.getChainId();
+        const hashResult = await this.getSafeTransactionHash(
+          safe,
+          txData,
+          version,
+          chainId
+        );
+
+        return matchResult(hashResult, {
+          ok: ({ value: safeTxHash }) => makeOk({ txData, safeTxHash }),
           error: ({ error }) => makeError(error),
-
-          ok: async ({ value: version }) => {
-            const chainId = await this.client.getChainId();
-
-            const hashResult = await this.getSafeTransactionHash(
-              safe,
-              txData,
-              version,
-              chainId
-            );
-
-            return matchResult(hashResult, {
-              ok: ({ value: safeTxHash }) => makeOk({ txData, safeTxHash }),
-              error: ({ error }) => makeError(error),
-            });
-          },
         });
       },
     });
