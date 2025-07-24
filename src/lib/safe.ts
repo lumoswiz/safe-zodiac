@@ -53,7 +53,7 @@ import {
 } from './utils';
 import { generateSafeTypedData } from './safe-eip712';
 
-export class SafeContractSuite {
+export class SafeSuite {
   client: PublicClient;
 
   constructor(publicClient: PublicClient) {

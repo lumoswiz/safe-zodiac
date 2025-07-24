@@ -33,7 +33,7 @@ import {
   toMetaTx,
 } from './utils';
 
-export class ZodiacRolesSuite {
+export class RolesSuite {
   client: PublicClient;
 
   constructor(publicClient: PublicClient) {
