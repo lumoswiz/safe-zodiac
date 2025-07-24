@@ -1,4 +1,4 @@
-import { Address } from 'viem';
+import { Account, Address } from 'viem';
 import { PartialRolesSetupArgs } from './roles';
 import { MetaTransactionData } from './safe';
 
@@ -40,3 +40,12 @@ export interface BuildInitialSetupArgs {
   startAt: SetupStage;
   options: TxBuildOptions;
 }
+
+export type ExecFullSetupTxArgs = {
+  safe: Address;
+  account: Account;
+  maybeSaltNonce?: bigint;
+  config?: RolesSetupConfig;
+  options?: TxBuildOptions;
+  executionMode?: ExecutionMode;
+};
