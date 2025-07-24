@@ -25,6 +25,8 @@ import {
   EnsureModuleEnabledResult,
   SafeTransactionData,
   SAFE_VERSION_FALLBACK,
+  ExecutionMode,
+  OperationType,
 } from './types';
 import {
   extractOptionalMetaTx,
@@ -41,6 +43,13 @@ export class ZodiacSafeSuite {
   readonly rolesSuite: ZodiacRolesSuite;
   private static readonly DEFAULT_ROLES_NONCE: bigint =
     46303759331860629381431170770107494699648271559618626860680275899814502026071n;
+  private readonly execStrategies: Record<
+    ExecutionMode,
+    (txs: MetaTransactionData[], account: Account) => Promise<Result<Hex[]>>
+  > = {
+    [ExecutionMode.SendCalls]: this.execWithSendCalls.bind(this),
+    [ExecutionMode.SendTransactions]: this.execWithSendTransactions.bind(this),
+  };
 
   constructor(publicClient: PublicClient) {
     this.safeSuite = new SafeContractSuite(publicClient);
@@ -55,7 +64,8 @@ export class ZodiacSafeSuite {
     rolesSetup: PartialRolesSetupArgs = {},
     rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
     extraSetupTxs: MetaTransactionData[] = [],
-    extraMultisendTxs: MetaTransactionData[] = []
+    extraMultisendTxs: MetaTransactionData[] = [],
+    executionMode: ExecutionMode = ExecutionMode.SendTransactions
   ): Promise<Result<Hex[]>> {
     const client = this.safeSuite.client.extend(walletActions);
     const safeDeployed = await isContractDeployed(client, safe);
@@ -75,57 +85,117 @@ export class ZodiacSafeSuite {
         error: (err) => makeError(err.error),
 
         ok: async ({ value: { setupTxs, multisendTxs } }) => {
-          const txHashes: Hex[] = [];
-
           try {
-            for (const tx of setupTxs) {
-              const hash = await client.sendTransaction({
-                account,
-                chain: null,
-                to: tx.to,
-                data: tx.data,
-                value: BigInt(tx.value),
-              });
-              await client.waitForTransactionReceipt({ hash });
-              txHashes.push(hash);
-            }
-
             if (multisendTxs.length > 0) {
               const signedResult = await this.signMultisendTx(
                 safe,
                 multisendTxs,
-                account
+                account,
+                safeDeployed
               );
 
-              return matchResult(signedResult, {
-                error: (err) => makeError(err.error),
-
+              const execMetaTx = await matchResult(signedResult, {
+                error: ({ error }) => Promise.reject(error),
                 ok: async ({ value: { txData, signature } }) => {
-                  const execResult = await this.execTx(
+                  const execResult = await this.safeSuite.buildExecTransaction(
                     safe,
                     txData,
-                    signature,
-                    account
+                    signature
                   );
 
                   return matchResult(execResult, {
-                    error: (err) => makeError(err.error),
-                    ok: ({ value: hash }) => {
-                      txHashes.push(hash);
-                      return makeOk(txHashes);
-                    },
+                    ok: ({ value: { to, data, value } }) => ({
+                      to,
+                      data,
+                      value,
+                      operation: OperationType.DelegateCall,
+                    }),
+                    error: ({ error }) => Promise.reject(error),
                   });
                 },
               });
+
+              setupTxs.push(execMetaTx);
             }
 
-            return makeOk(txHashes);
+            const execResult = await this.execWithMode(
+              setupTxs,
+              account,
+              executionMode
+            );
+
+            return matchResult(execResult, {
+              ok: ({ value }) => makeOk(value),
+              error: ({ error }) => makeError(error),
+            });
           } catch (err) {
             return makeError(err);
           }
         },
       }
     );
+  }
+
+  private async execWithMode(
+    txs: MetaTransactionData[],
+    account: Account,
+    mode: ExecutionMode
+  ): Promise<Result<Hex[]>> {
+    const exec =
+      this.execStrategies[mode] ??
+      this.execStrategies[ExecutionMode.SendTransactions];
+    return exec(txs, account);
+  }
+
+  private async execWithSendTransactions(
+    txs: MetaTransactionData[],
+    account: Account
+  ): Promise<Result<Hex[]>> {
+    const client = this.safeSuite.client.extend(walletActions);
+    const txHashes: Hex[] = [];
+
+    try {
+      for (const tx of txs) {
+        const hash = await client.sendTransaction({
+          account,
+          chain: null,
+          to: tx.to,
+          data: tx.data,
+          value: BigInt(tx.value),
+        });
+
+        await client.waitForTransactionReceipt({ hash });
+        txHashes.push(hash);
+      }
+
+      return makeOk(txHashes);
+    } catch (error) {
+      return makeError(error);
+    }
+  }
+
+  private async execWithSendCalls(
+    txs: MetaTransactionData[],
+    account: Account
+  ): Promise<Result<Hex[]>> {
+    try {
+      const client = this.safeSuite.client.extend(walletActions);
+
+      const calls = txs.map((tx) => ({
+        to: tx.to,
+        data: tx.data,
+        value: BigInt(tx.value),
+      }));
+
+      const { id } = await client.sendCalls({
+        account,
+        calls,
+      });
+
+      return makeOk([id as Hex]);
+    } catch (error) {
+      return makeError(error);
+    }
   }
 
   async buildAllTx(
