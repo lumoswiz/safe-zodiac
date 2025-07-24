@@ -43,7 +43,7 @@ export function makeOk<T, E = unknown>(value: T): Result<T, E> {
   return { status: 'ok', value };
 }
 
-export function makeError<T = unknown>(error: T): Result<never, T> {
+export function makeError<T>(error: unknown): Result<T, unknown> {
   return { status: 'error', error };
 }
 
