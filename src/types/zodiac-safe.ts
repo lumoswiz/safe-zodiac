@@ -23,7 +23,6 @@ export type ResolvedSafeContext = {
 };
 
 export interface RolesSetupConfig {
-  owner: Address;
   rolesSetup?: PartialRolesSetupArgs;
   rolesNonce?: bigint;
 }
@@ -34,8 +33,10 @@ export interface TxBuildOptions {
 }
 
 export interface BuildInitialSetupArgs {
-  context: ResolvedSafeContext;
+  safeAddress: Address;
+  safeNonce: bigint;
+  owner: Address;
   config: RolesSetupConfig;
   startAt: SetupStage;
-  options?: TxBuildOptions;
+  options: TxBuildOptions;
 }
