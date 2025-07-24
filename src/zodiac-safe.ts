@@ -17,13 +17,15 @@ import {
   RolesSetupArgs,
   RoleScope,
   SetupStage,
-  PartialRolesSetupArgs,
   EnsureModuleEnabledResult,
   SafeTransactionData,
   SAFE_VERSION_FALLBACK,
   ExecutionMode,
   OperationType,
   ResolvedSafeContext,
+  RolesSetupConfig,
+  TxBuildOptions,
+  BuildInitialSetupArgs,
 } from './types';
 import {
   extractOptionalMetaTx,
@@ -56,11 +58,9 @@ export class ZodiacSafeSuite {
   async execFullSetupTx(
     safe: Address,
     account: Account,
-    maybeSaltNonce: bigint | undefined,
-    rolesSetup: PartialRolesSetupArgs = {},
-    rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
-    extraSetupTxs: MetaTransactionData[] = [],
-    extraMultisendTxs: MetaTransactionData[] = [],
+    maybeSaltNonce?: bigint,
+    config: RolesSetupConfig = {},
+    options: TxBuildOptions = {},
     executionMode: ExecutionMode = ExecutionMode.SendTransactions
   ): Promise<Result<Hex[]>> {
     const contextResult = await this.resolveSafeContext(
@@ -74,15 +74,11 @@ export class ZodiacSafeSuite {
         makeError(`Failed to resolve Safe context:\n${formatError(error)}`),
 
       ok: async ({ value: context }) => {
-        const { safeAddress, deployed } = context;
-
         const txBucketsResult = await this.buildAllTx(
           context,
           account.address,
-          rolesSetup,
-          rolesNonce,
-          extraSetupTxs,
-          extraMultisendTxs
+          config,
+          options
         );
 
         return matchResult(txBucketsResult, {
@@ -95,10 +91,10 @@ export class ZodiacSafeSuite {
             try {
               if (multisendTxs.length > 0) {
                 const signedResult = await this.signMultisendTx(
-                  safeAddress,
+                  context.safeAddress,
                   multisendTxs,
                   account,
-                  deployed
+                  context.deployed
                 );
 
                 const execMetaTx = await matchResult(signedResult, {
@@ -106,7 +102,7 @@ export class ZodiacSafeSuite {
                   ok: async ({ value: { txData, signature } }) => {
                     const execResult =
                       await this.safeSuite.buildExecTransaction(
-                        safeAddress,
+                        context.safeAddress,
                         txData,
                         signature
                       );
@@ -262,31 +258,28 @@ export class ZodiacSafeSuite {
     }
   }
 
-  async buildAllTx(
+  private async buildAllTx(
     context: ResolvedSafeContext,
     owner: Address,
-    rolesSetup: PartialRolesSetupArgs = {},
-    rolesNonce: bigint = ZodiacSafeSuite.DEFAULT_ROLES_NONCE,
-    extraSetupTxs: MetaTransactionData[] = [],
-    extraMultisendTxs: MetaTransactionData[] = []
+    config: RolesSetupConfig,
+    options: TxBuildOptions
   ): Promise<BuildTxBucketsResult> {
     const { safeAddress, saltNonce, deployed } = context;
+    const rolesNonce = config.rolesNonce ?? ZodiacSafeSuite.DEFAULT_ROLES_NONCE;
 
     if (!deployed) {
-      if (saltNonce === null) {
+      if (saltNonce === null)
         return makeError('Missing saltNonce for undeployed Safe');
-      }
 
-      const allBuckets = await this.buildInitialSetupTxs(
+      const allBuckets = await this.buildInitialSetupTxs({
         safeAddress,
         owner,
-        saltNonce,
-        rolesNonce,
-        rolesSetup,
-        SetupStage.DeploySafe,
-        extraSetupTxs,
-        extraMultisendTxs
-      );
+        safeNonce: saltNonce,
+        config,
+        options,
+        startAt: SetupStage.DeploySafe,
+      });
+
       return makeOk(allBuckets);
     }
 
@@ -302,16 +295,15 @@ export class ZodiacSafeSuite {
     setupTxs.push(...rolesTxs);
 
     if (rolesTxs.length > 0) {
-      const extra = await this.buildInitialSetupTxs(
+      const extra = await this.buildInitialSetupTxs({
         safeAddress,
         owner,
-        saltNonce ?? 0n,
-        rolesNonce,
-        rolesSetup,
-        SetupStage.EnableModule,
-        extraSetupTxs,
-        extraMultisendTxs
-      );
+        safeNonce: saltNonce ?? 0n,
+        config,
+        options,
+        startAt: SetupStage.EnableModule,
+      });
+
       setupTxs.push(...extra.setupTxs);
       multisendTxs.push(...extra.multisendTxs);
       return makeOk({ setupTxs, multisendTxs });
@@ -326,16 +318,15 @@ export class ZodiacSafeSuite {
     multisendTxs.push(...enableVal.metaTxs);
 
     if (enableVal.metaTxs.length > 0) {
-      const extra = await this.buildInitialSetupTxs(
+      const extra = await this.buildInitialSetupTxs({
         safeAddress,
         owner,
-        saltNonce ?? 0n,
-        rolesNonce,
-        rolesSetup,
-        SetupStage.AssignRoles,
-        extraSetupTxs,
-        extraMultisendTxs
-      );
+        safeNonce: saltNonce ?? 0n,
+        config,
+        options,
+        startAt: SetupStage.AssignRoles,
+      });
+
       multisendTxs.push(...extra.multisendTxs);
       return makeOk({ setupTxs, multisendTxs });
     }
@@ -513,24 +504,18 @@ export class ZodiacSafeSuite {
     });
   }
 
-  private async buildInitialSetupTxs(
-    safeAddress: Address,
-    owner: Address,
-    safeNonce: bigint,
-    rolesNonce: bigint,
-    rolesSetup: PartialRolesSetupArgs = {},
-    startAt: SetupStage,
-    extraSetupTxs: MetaTransactionData[] = [],
-    extraMultisendTxs: MetaTransactionData[] = []
-  ): Promise<{
+  private async buildInitialSetupTxs(args: BuildInitialSetupArgs): Promise<{
     setupTxs: MetaTransactionData[];
     multisendTxs: MetaTransactionData[];
   }> {
+    const rolesNonce =
+      args.config.rolesNonce ?? ZodiacSafeSuite.DEFAULT_ROLES_NONCE;
+    const rolesSetup = args.config.rolesSetup;
     const setupTxs: MetaTransactionData[] = [];
     const multisendTxs: MetaTransactionData[] = [];
 
     const addrResult = this.rolesSuite.calculateModuleProxyAddress(
-      safeAddress,
+      args.safeAddress,
       rolesNonce
     );
 
@@ -539,26 +524,24 @@ export class ZodiacSafeSuite {
       error: ({ error }) => Promise.reject(error),
     });
 
-    type StepFn = () => Promise<void>;
-
-    const steps: Record<SetupStage, StepFn> = {
+    const steps: Record<SetupStage, () => Promise<void>> = {
       [SetupStage.DeploySafe]: async () => {
-        setupTxs.push(await this.buildSafeDeployTx(owner, safeNonce));
+        setupTxs.push(await this.buildSafeDeployTx(args.owner, args.safeNonce));
       },
       [SetupStage.DeployModule]: async () => {
-        const tx = await this.buildRolesDeployTx(safeAddress, rolesNonce);
+        const tx = await this.buildRolesDeployTx(args.safeAddress, rolesNonce);
         if (tx) setupTxs.push(tx);
       },
       [SetupStage.EnableModule]: async () => {
         multisendTxs.push(
           await this.safeSuite.buildRawEnableModuleMetaTx(
-            safeAddress,
+            args.safeAddress,
             rolesAddress
           )
         );
       },
       [SetupStage.AssignRoles]: async () => {
-        if (!rolesSetup.member || !rolesSetup.roleKey) {
+        if (!rolesSetup?.member || !rolesSetup?.roleKey) {
           throw new Error('member and roleKey required for AssignRoles');
         }
         multisendTxs.push(
@@ -569,7 +552,7 @@ export class ZodiacSafeSuite {
         );
       },
       [SetupStage.ScopeTarget]: async () => {
-        if (!rolesSetup.target || !rolesSetup.roleKey) {
+        if (!rolesSetup?.target || !rolesSetup?.roleKey) {
           throw new Error('target and roleKey required for ScopeTarget');
         }
         multisendTxs.push(
@@ -580,7 +563,11 @@ export class ZodiacSafeSuite {
         );
       },
       [SetupStage.ScopeFunctions]: async () => {
-        if (!rolesSetup.scopes || !rolesSetup.target || !rolesSetup.roleKey) {
+        if (
+          !rolesSetup?.scopes ||
+          !rolesSetup?.target ||
+          !rolesSetup?.roleKey
+        ) {
           throw new Error(
             'scopes, target, and roleKey required for ScopeFunctions'
           );
@@ -597,12 +584,16 @@ export class ZodiacSafeSuite {
       },
     };
 
-    for (let stage = startAt; stage <= SetupStage.ScopeFunctions; stage++) {
+    for (
+      let stage = args.startAt;
+      stage <= SetupStage.ScopeFunctions;
+      stage++
+    ) {
       await steps[stage]();
     }
 
-    setupTxs.push(...extraSetupTxs);
-    multisendTxs.push(...extraMultisendTxs);
+    setupTxs.push(...(args.options.extraSetupTxs || []));
+    multisendTxs.push(...(args.options.extraMultisendTxs || []));
 
     return { setupTxs, multisendTxs };
   }
