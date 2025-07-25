@@ -47,10 +47,6 @@ export function makeError<T>(error: unknown): Result<T, unknown> {
   return { status: 'error', error };
 }
 
-export function makeOptional<T, E = unknown>(value?: T): Result<T | null, E> {
-  return makeOk(value ?? null);
-}
-
 export async function matchResult<
   T extends { status: 'ok'; value: any } | { status: 'error'; error: any },
   R
@@ -82,19 +78,6 @@ export async function flatMapResult<T, E, U>(
   const res = await promise;
   if (res.status === 'error') return res;
   return fn(res.value);
-}
-
-export function extractOptionalMetaTx(
-  result: Promise<BuildTxResult>
-): Promise<Result<MetaTransactionData | null>> {
-  return flatMapResult(result, (value) => {
-    switch (value.kind) {
-      case 'built':
-        return makeOptional(value.tx);
-      case 'skipped':
-        return makeOptional();
-    }
-  });
 }
 
 export async function expectBuiltTx(
