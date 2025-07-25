@@ -15,10 +15,11 @@ import {
   TxBuildOptions,
 } from '../types';
 import {
-  extractOptionalMetaTx,
+  expectBuiltTx,
   makeError,
   makeOk,
   matchResult,
+  maybeBuiltTx,
 } from '../shared/utils';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';
@@ -160,12 +161,9 @@ export async function buildInitialSetupTxs(
       );
     },
     [SetupStage.DeployModule]: async () => {
-      const tx = await buildRolesDeployTx(
-        args.rolesSuite,
-        args.safeAddress,
-        rolesNonce
+      setupTxs.push(
+        await buildRolesDeployTx(args.rolesSuite, args.safeAddress, rolesNonce)
       );
-      if (tx) setupTxs.push(tx);
     },
     [SetupStage.EnableModule]: async () => {
       multisendTxs.push(
@@ -233,34 +231,21 @@ export async function buildSafeDeployTx(
   owner: Address,
   nonce: bigint
 ): Promise<MetaTransactionData> {
-  const txResult = await extractOptionalMetaTx(
-    safeSuite.buildSafeDeploymentTx(owner, nonce)
+  return expectBuiltTx(
+    safeSuite.buildSafeDeploymentTx(owner, nonce),
+    'Safe deployment'
   );
-
-  return matchResult(txResult, {
-    ok: ({ value }) => {
-      if (!value) {
-        return Promise.reject('unexpected skip');
-      }
-      return value;
-    },
-    error: ({ error }) => Promise.reject(error),
-  });
 }
 
 export async function buildRolesDeployTx(
   rolesSuite: RolesSuite,
   safeAddr: Address,
   nonce: bigint
-): Promise<MetaTransactionData | null> {
-  const txResult = await extractOptionalMetaTx(
-    rolesSuite.buildDeployModuleTx(safeAddr, nonce)
+): Promise<MetaTransactionData> {
+  return expectBuiltTx(
+    rolesSuite.buildDeployModuleTx(safeAddr, nonce),
+    'Roles module deployment'
   );
-
-  return matchResult(txResult, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
 }
 
 export async function buildAssignRolesTx(
@@ -371,12 +356,9 @@ export async function ensureRolesModule(
     return makeOk({ rolesAddress, metaTxs: [] });
   }
 
-  const deployResult = await extractOptionalMetaTx(
+  const maybeTx = await maybeBuiltTx(
     rolesSuite.buildDeployModuleTx(safe, rolesNonce)
   );
 
-  return matchResult(deployResult, {
-    ok: ({ value }) => makeOk({ rolesAddress, metaTxs: value ? [value] : [] }),
-    error: ({ error }) => makeError(error),
-  });
+  return makeOk({ rolesAddress, metaTxs: maybeTx ? [maybeTx] : [] });
 }

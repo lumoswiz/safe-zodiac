@@ -47,10 +47,6 @@ export function makeError<T>(error: unknown): Result<T, unknown> {
   return { status: 'error', error };
 }
 
-export function makeOptional<T, E = unknown>(value?: T): Result<T | null, E> {
-  return makeOk(value ?? null);
-}
-
 export async function matchResult<
   T extends { status: 'ok'; value: any } | { status: 'error'; error: any },
   R
@@ -84,15 +80,28 @@ export async function flatMapResult<T, E, U>(
   return fn(res.value);
 }
 
-export function extractOptionalMetaTx(
+export async function expectBuiltTx(
+  result: Promise<BuildTxResult>,
+  context: string
+): Promise<MetaTransactionData> {
+  const res = await result;
+  return matchResult(res, {
+    ok: ({ value }) => {
+      if (value.kind === 'skipped') {
+        throw new Error(`${context} unexpectedly skipped.`);
+      }
+      return value.tx;
+    },
+    error: ({ error }) => Promise.reject(error),
+  });
+}
+
+export async function maybeBuiltTx(
   result: Promise<BuildTxResult>
-): Promise<Result<MetaTransactionData | null>> {
-  return flatMapResult(result, (value) => {
-    switch (value.kind) {
-      case 'built':
-        return makeOptional(value.tx);
-      case 'skipped':
-        return makeOptional();
-    }
+): Promise<MetaTransactionData | null> {
+  const res = await result;
+  return matchResult(res, {
+    ok: ({ value }) => (value.kind === 'built' ? value.tx : null),
+    error: ({ error }) => Promise.reject(error),
   });
 }
