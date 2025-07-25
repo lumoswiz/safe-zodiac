@@ -12,6 +12,7 @@ export enum SetupStage {
   AssignRoles,
   ScopeTarget,
   ScopeFunctions,
+  NothingToDo,
 }
 
 export enum ExecutionMode {
@@ -49,6 +50,22 @@ export interface BuildInitialSetupArgs {
   config: RolesSetupConfig;
   startAt: SetupStage;
   options: TxBuildOptions;
+}
+
+export interface DetermineStartStageArgs {
+  safeSuite: SafeSuite;
+  rolesSuite: RolesSuite;
+  context: ResolvedSafeContext;
+  config: RolesSetupConfig;
+  chainId: number;
+}
+
+export interface RoleSubgraphStatus {
+  assigned: boolean;
+  assignedToMember: boolean;
+  targetScoped: boolean;
+  selectorsScoped: boolean;
+  missingSelectors?: Hex[] | undefined;
 }
 
 export type ExecFullSetupTxArgs = {
