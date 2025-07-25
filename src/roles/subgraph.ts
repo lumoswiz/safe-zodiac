@@ -1,14 +1,48 @@
 import { Address, Hex } from 'viem';
+import { CHAINS } from '../shared/constants';
 import {
   Clearance,
   ExecutionOptions,
-  FetchRoleResult,
   RawSubgraphRole,
   SubgraphRole,
 } from '../types';
-import { CHAINS } from '../shared/constants';
 
-export type FetchOptions = Omit<RequestInit, 'method' | 'body'>;
+const SUBGRAPH_URL =
+  'https://gnosisguild.squids.live/roles:production/api/graphql';
+
+const ROLE_QUERY = `
+  query Role($id: ID!) {
+    role(id: $id) {
+      key
+      members {
+        member {
+          address
+        }
+      }
+      targets {
+        address
+        clearance
+        executionOptions
+        functions {
+          selector
+          executionOptions
+          wildcarded
+          condition {
+            id
+            json
+          }
+        }
+      }
+      annotations {
+        uri
+        schema
+      }
+      lastUpdate
+    }
+  }
+`.trim();
+
+type FetchOptions = Omit<RequestInit, 'method' | 'body'>;
 
 interface QueryRequest {
   query: string;
@@ -16,116 +50,94 @@ interface QueryRequest {
   operationName: string;
 }
 
-const SQD_URL = 'https://gnosisguild.squids.live/roles:production/api/graphql';
-
-export const fetchFromSubgraph = async <T = unknown>(
+async function fetchFromSubgraph<T = unknown>(
   request: QueryRequest,
   options?: FetchOptions
-): Promise<T> => {
-  const res = await fetch(SQD_URL, {
-    ...options,
+): Promise<T> {
+  const res = await fetch(SUBGRAPH_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
     body: JSON.stringify(request),
+    ...options,
   });
 
-  const { data, error, errors } = await res.json();
-  const firstError = error || (errors && errors[0]);
-  if (firstError) {
-    const msg =
-      typeof firstError === 'object'
-        ? firstError.message || 'Unknown error'
-        : firstError;
-    throw new Error(msg);
-  }
-  if (!data) throw new Error('Query returned no data');
-  return data as T;
-};
+  const json = await res.json();
 
-function parseClearance(s: string): Clearance {
-  return Clearance[s as keyof typeof Clearance];
+  const error = json.error || (Array.isArray(json.errors) && json.errors[0]);
+  if (error) {
+    const message =
+      typeof error === 'object'
+        ? error.message || 'Unknown subgraph error'
+        : String(error);
+    throw new Error(`Subgraph error: ${message}`);
+  }
+
+  if (!json.data) {
+    throw new Error('Subgraph returned no data');
+  }
+
+  return json.data as T;
 }
 
-function parseExecOpt(s: string): ExecutionOptions {
-  if (!(s in ExecutionOptions)) {
-    throw new Error(`Unknown executionOptions value “${s}”`);
-  }
-  return ExecutionOptions[s as keyof typeof ExecutionOptions];
-}
-
-export const mapGraphQlRole = (raw: RawSubgraphRole): SubgraphRole => ({
-  key: raw.key,
-  members: raw.members.map((m) => m.member),
-  targets: raw.targets.map((t) => ({
-    address: t.address,
-    clearance: parseClearance(t.clearance),
-    executionOptions: parseExecOpt(t.executionOptions),
-    functions: t.functions.map((f) => ({
-      selector: f.selector,
-      executionOptions: parseExecOpt(f.executionOptions),
-      wildcarded: f.wildcarded,
-      condition: f.condition
-        ? { id: f.condition.id, payload: JSON.parse(f.condition.json) }
-        : null,
-    })),
-  })),
-  annotations: raw.annotations,
-  lastUpdate: raw.lastUpdate,
-});
-
-const ROLE_QUERY = `
-query Role($id: ID!) {
-  role(id: $id) {
-    key
-    members { member { address } }
-    targets {
-      address
-      clearance
-      executionOptions
-      functions {
-        selector
-        executionOptions
-        wildcarded
-        condition { id json }
-      }
-    }
-    annotations { uri schema }
-    lastUpdate
-  }
-}
-`.trim();
-
-export function getRoleId(
+function getRoleIdForSubgraph(
   chainId: number,
-  address: Address,
-  roleKey: Hex
-): Hex {
+  moduleAddress: string,
+  roleKey: string
+): string {
   const chain = CHAINS[chainId];
-  if (!chain) {
-    throw new Error(`Unsupported chain ID: ${chainId}`);
-  }
-  return `${chain.prefix}:${address.toLowerCase()}:${roleKey}` as Hex;
+  if (!chain) throw new Error(`Unsupported chain ID for subgraph: ${chainId}`);
+  return `${chain.prefix}:${moduleAddress.toLowerCase()}:${roleKey}`;
 }
 
-export const fetchRole = async (
-  chainId: number,
-  address: Address,
-  roleKey: Hex,
-  options?: FetchOptions
-): Promise<FetchRoleResult> => {
-  try {
-    const id = getRoleId(chainId, address, roleKey);
+function mapGraphQlRole(raw: RawSubgraphRole): SubgraphRole {
+  const parseClearance = (s: string): Clearance =>
+    Clearance[s as keyof typeof Clearance];
 
-    const { role } = await fetchFromSubgraph<{ role: SubgraphRole | null }>(
-      {
-        query: ROLE_QUERY,
-        variables: { id },
-        operationName: 'Role',
-      },
-      options
-    );
-    return { status: 'ok', value: role };
-  } catch (error) {
-    return { status: 'error', error };
-  }
-};
+  const parseExecOpt = (s: string): ExecutionOptions => {
+    if (!(s in ExecutionOptions)) {
+      throw new Error(`Unknown executionOptions value “${s}”`);
+    }
+    return ExecutionOptions[s as keyof typeof ExecutionOptions];
+  };
+
+  return {
+    key: raw.key,
+    members: raw.members.map((m) => m.member),
+    targets: raw.targets.map((t) => ({
+      address: t.address,
+      clearance: parseClearance(t.clearance),
+      executionOptions: parseExecOpt(t.executionOptions),
+      functions: t.functions.map((f) => ({
+        selector: f.selector,
+        executionOptions: parseExecOpt(f.executionOptions),
+        wildcarded: f.wildcarded,
+        condition: f.condition
+          ? { id: f.condition.id, payload: JSON.parse(f.condition.json) }
+          : null,
+      })),
+    })),
+    annotations: raw.annotations,
+    lastUpdate: raw.lastUpdate,
+  };
+}
+
+export async function fetchRoleFromSubgraph(
+  chainId: number,
+  moduleAddress: Address,
+  roleKey: Hex
+): Promise<SubgraphRole | null> {
+  const id = getRoleIdForSubgraph(chainId, moduleAddress, roleKey);
+
+  const res = await fetchFromSubgraph<{ role: RawSubgraphRole | null }>({
+    query: ROLE_QUERY,
+    variables: { id },
+    operationName: 'Role',
+  });
+
+  if (!res.role) return null;
+
+  return mapGraphQlRole(res.role);
+}
