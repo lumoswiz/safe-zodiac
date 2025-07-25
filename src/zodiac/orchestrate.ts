@@ -31,7 +31,8 @@ export async function orchestrateFullSetup(
     context,
     account.address,
     config,
-    options
+    options,
+    await safeSuite.client.getChainId()
   );
 
   return matchResult(txBucketsResult, {
