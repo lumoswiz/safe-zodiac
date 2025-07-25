@@ -1,9 +1,14 @@
 import { Account, Address, Hex } from 'viem';
-import { PartialRolesSetupArgs } from './roles';
 import { MetaTransactionData } from './safe';
-import { SafeSuite } from '../safe/suite';
-import { RolesSuite } from '../roles/suite';
 import { Result } from './result';
+import { PartialRolesSetupArgs } from './roles';
+import { SafeSuite } from 'safe';
+import { RolesSuite } from 'roles/suite';
+
+export enum ExecutionMode {
+  SendTransactions = 'legacy',
+  SendCalls = 'eip5792',
+}
 
 export enum SetupStage {
   DeploySafe,
@@ -13,11 +18,6 @@ export enum SetupStage {
   ScopeTarget,
   ScopeFunctions,
   NothingToDo,
-}
-
-export enum ExecutionMode {
-  SendTransactions = 'legacy',
-  SendCalls = 'eip5792',
 }
 
 export type ExecStrategy = (
@@ -60,6 +60,15 @@ export interface DetermineStartStageArgs {
   chainId: number;
 }
 
+export interface ExecFullSetupTxArgs {
+  safe: Address;
+  account: Account;
+  maybeSaltNonce?: bigint;
+  config?: RolesSetupConfig;
+  options?: TxBuildOptions;
+  executionMode?: ExecutionMode;
+}
+
 export interface RoleSubgraphStatus {
   assigned: boolean;
   assignedToMember: boolean;
@@ -68,11 +77,27 @@ export interface RoleSubgraphStatus {
   missingSelectors?: Hex[] | undefined;
 }
 
-export type ExecFullSetupTxArgs = {
-  safe: Address;
-  account: Account;
-  maybeSaltNonce?: bigint;
-  config?: RolesSetupConfig;
-  options?: TxBuildOptions;
-  executionMode?: ExecutionMode;
-};
+export type BuildTxValue =
+  | { kind: 'built'; tx: MetaTransactionData }
+  | { kind: 'skipped' };
+
+export type BuildTxResult = Result<BuildTxValue>;
+
+export type BuildTxBucketsResult = Result<{
+  setupTxs: MetaTransactionData[];
+  multisendTxs: MetaTransactionData[];
+}>;
+
+export type EnsureModuleEnabledResult = Result<{
+  metaTxs: MetaTransactionData[];
+}>;
+
+export type EnsureRolesResult = Result<{
+  rolesAddress: Address;
+  metaTxs: MetaTransactionData[];
+}>;
+
+export type EnsureSafeResult = Result<{
+  safeAddress: Address;
+  metaTxs: MetaTransactionData[];
+}>;

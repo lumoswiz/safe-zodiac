@@ -1,6 +1,6 @@
 import { satisfies } from 'semver';
 import { hashMessage, hashTypedData, isHex, fromHex, type Hash } from 'viem';
-import type { EIP712TypedData, MinimalSafeInfo, Result } from '../types';
+import { EIP712TypedData, MinimalSafeInfo, Result } from '@sdk/types';
 
 const EQ_OR_GT_1_3_0 = '>=1.3.0';
 

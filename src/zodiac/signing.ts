@@ -4,7 +4,7 @@ import {
   Result,
   SAFE_VERSION_FALLBACK,
   SafeTransactionData,
-} from '../types';
+} from '@sdk/types';
 import { makeError, makeOk, matchResult } from '../shared/utils';
 import { encodeMulti, generateSafeTypedData, SafeSuite } from '../safe';
 

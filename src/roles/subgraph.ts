@@ -5,7 +5,7 @@ import {
   ExecutionOptions,
   RawSubgraphRole,
   SubgraphRole,
-} from '../types';
+} from '@sdk/types';
 
 const SUBGRAPH_URL =
   'https://gnosisguild.squids.live/roles:production/api/graphql';

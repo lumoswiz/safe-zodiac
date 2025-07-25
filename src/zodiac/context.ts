@@ -1,5 +1,5 @@
 import { Address, isAddressEqual } from 'viem';
-import { ResolvedSafeContext, Result } from '../types';
+import { ResolvedSafeContext, Result } from '@sdk/types';
 import { SafeSuite } from '../safe';
 import {
   isContractDeployed,

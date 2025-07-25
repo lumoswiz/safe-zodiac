@@ -4,7 +4,7 @@ import {
   ExecutionMode,
   MetaTransactionData,
   Result,
-} from '../types';
+} from '@sdk/types';
 import { SafeSuite } from '../safe';
 import { makeError, makeOk } from '../shared/utils';
 

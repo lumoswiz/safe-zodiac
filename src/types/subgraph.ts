@@ -1,41 +1,6 @@
 import { Hex } from 'viem';
-import { ExecutionOptions } from './roles';
 
-export interface SubgraphRole {
-  key: Hex;
-  members: MemberAssignment[];
-  targets: Target[];
-  annotations: Annotation[];
-  lastUpdate: number;
-}
-
-export interface MemberAssignment {
-  address: Hex;
-}
-
-export interface Target {
-  address: Hex;
-  clearance: Clearance;
-  executionOptions: ExecutionOptions;
-  functions: Func[];
-}
-
-export interface Func {
-  selector: Hex;
-  executionOptions: ExecutionOptions;
-  wildcarded: boolean;
-  condition: Condition | null;
-}
-
-export interface Condition {
-  id: string;
-  payload: unknown;
-}
-
-export interface Annotation {
-  uri: string;
-  schema: string;
-}
+import { ExecutionOptions } from './index';
 
 export enum Clearance {
   None = 0,
@@ -46,8 +11,40 @@ export enum Clearance {
 export type ClearanceKey = keyof typeof Clearance;
 export type ExecKey = keyof typeof ExecutionOptions;
 
-export interface RawMember {
-  member: { address: Hex };
+export interface Annotation {
+  uri: string;
+  schema: string;
+}
+
+export interface Condition {
+  id: string;
+  payload: unknown;
+}
+
+export interface Func {
+  selector: Hex;
+  executionOptions: ExecutionOptions;
+  wildcarded: boolean;
+  condition: Condition | null;
+}
+
+export interface MemberAssignment {
+  address: Hex;
+}
+
+export interface SubgraphRole {
+  key: Hex;
+  members: MemberAssignment[];
+  targets: Target[];
+  annotations: Annotation[];
+  lastUpdate: number;
+}
+
+export interface Target {
+  address: Hex;
+  clearance: Clearance;
+  executionOptions: ExecutionOptions;
+  functions: Func[];
 }
 
 export interface RawFunction {
@@ -55,6 +52,10 @@ export interface RawFunction {
   executionOptions: ExecKey;
   wildcarded: boolean;
   condition: { id: string; json: string } | null;
+}
+
+export interface RawMember {
+  member: { address: Hex };
 }
 
 export interface RawTarget {

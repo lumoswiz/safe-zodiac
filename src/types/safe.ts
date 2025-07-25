@@ -1,9 +1,9 @@
-import {
-  type Address,
-  type Hex,
-  type TypedDataDomain,
-  type TypedDataParameter,
-} from 'viem';
+import type { Address, Hex } from 'viem';
+
+export enum OperationType {
+  Call = 0,
+  DelegateCall = 1,
+}
 
 export type SafeVersion = '1.4.1' | '1.3.0' | '1.2.0' | '1.1.1' | '1.0.0';
 
@@ -14,11 +14,6 @@ export type MinimalSafeInfo = {
   chainId: number;
   version: SafeVersion;
 };
-
-export enum OperationType {
-  Call = 0,
-  DelegateCall = 1,
-}
 
 export interface MetaTransactionData {
   readonly to: Address;
@@ -35,25 +30,4 @@ export interface SafeTransactionData extends MetaTransactionData {
   gasToken: Address;
   refundReceiver: Address;
   nonce: bigint;
-}
-
-export type TypedMessageTypes = Record<string, TypedDataParameter[]>;
-
-export interface EIP712TypedData {
-  domain: TypedDataDomain;
-  types: TypedMessageTypes;
-  message: Record<string, unknown>;
-  primaryType: string;
-}
-
-export interface EIP712TxTypes {
-  EIP712Domain: TypedDataParameter[];
-  SafeTx: TypedDataParameter[];
-}
-
-export interface SafeEIP712Args {
-  safeAddress: Address;
-  safeVersion: string;
-  chainId: number;
-  data: SafeTransactionData | EIP712TypedData | Hex;
 }

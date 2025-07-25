@@ -5,13 +5,13 @@ import {
   type TypedDataDomain,
   type TypedDataParameter,
 } from 'viem';
-import type {
-  SafeEIP712Args,
-  EIP712TypedData,
-  TypedMessageTypes,
-  EIP712TxTypes,
-} from '../types';
 import { EQ_OR_GT_1_3_0 } from './constants';
+import {
+  EIP712TxTypes,
+  EIP712TypedData,
+  SafeEIP712Args,
+  TypedMessageTypes,
+} from '@sdk/types';
 
 const EIP712_DOMAIN_WITH_CHAIN: TypedDataParameter[] = [
   { name: 'chainId', type: 'uint256' },
