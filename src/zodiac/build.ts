@@ -161,12 +161,9 @@ export async function buildInitialSetupTxs(
       );
     },
     [SetupStage.DeployModule]: async () => {
-      const tx = await buildRolesDeployTx(
-        args.rolesSuite,
-        args.safeAddress,
-        rolesNonce
+      setupTxs.push(
+        await buildRolesDeployTx(args.rolesSuite, args.safeAddress, rolesNonce)
       );
-      if (tx) setupTxs.push(tx);
     },
     [SetupStage.EnableModule]: async () => {
       multisendTxs.push(
