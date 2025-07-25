@@ -14,12 +14,7 @@ import {
   SetupStage,
   TxBuildOptions,
 } from '../types';
-import {
-  extractOptionalMetaTx,
-  makeError,
-  makeOk,
-  matchResult,
-} from '../shared/utils';
+import { expectBuiltTx, makeError, makeOk, matchResult } from '../shared/utils';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';
 import { DEFAULT_ROLES_NONCE } from './constants';
@@ -233,34 +228,21 @@ export async function buildSafeDeployTx(
   owner: Address,
   nonce: bigint
 ): Promise<MetaTransactionData> {
-  const txResult = await extractOptionalMetaTx(
-    safeSuite.buildSafeDeploymentTx(owner, nonce)
+  return expectBuiltTx(
+    safeSuite.buildSafeDeploymentTx(owner, nonce),
+    'Safe deployment'
   );
-
-  return matchResult(txResult, {
-    ok: ({ value }) => {
-      if (!value) {
-        return Promise.reject('unexpected skip');
-      }
-      return value;
-    },
-    error: ({ error }) => Promise.reject(error),
-  });
 }
 
 export async function buildRolesDeployTx(
   rolesSuite: RolesSuite,
   safeAddr: Address,
   nonce: bigint
-): Promise<MetaTransactionData | null> {
-  const txResult = await extractOptionalMetaTx(
-    rolesSuite.buildDeployModuleTx(safeAddr, nonce)
+): Promise<MetaTransactionData> {
+  return expectBuiltTx(
+    rolesSuite.buildDeployModuleTx(safeAddr, nonce),
+    'Roles module deployment'
   );
-
-  return matchResult(txResult, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
 }
 
 export async function buildAssignRolesTx(
