@@ -95,3 +95,13 @@ export async function expectBuiltTx(
     error: ({ error }) => Promise.reject(error),
   });
 }
+
+export async function maybeBuiltTx(
+  result: Promise<BuildTxResult>
+): Promise<MetaTransactionData | null> {
+  const res = await result;
+  return matchResult(res, {
+    ok: ({ value }) => (value.kind === 'built' ? value.tx : null),
+    error: ({ error }) => Promise.reject(error),
+  });
+}

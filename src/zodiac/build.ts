@@ -14,7 +14,13 @@ import {
   SetupStage,
   TxBuildOptions,
 } from '../types';
-import { expectBuiltTx, makeError, makeOk, matchResult } from '../shared/utils';
+import {
+  expectBuiltTx,
+  makeError,
+  makeOk,
+  matchResult,
+  maybeBuiltTx,
+} from '../shared/utils';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';
 import { DEFAULT_ROLES_NONCE } from './constants';
@@ -353,12 +359,9 @@ export async function ensureRolesModule(
     return makeOk({ rolesAddress, metaTxs: [] });
   }
 
-  const deployResult = await extractOptionalMetaTx(
+  const maybeTx = await maybeBuiltTx(
     rolesSuite.buildDeployModuleTx(safe, rolesNonce)
   );
 
-  return matchResult(deployResult, {
-    ok: ({ value }) => makeOk({ rolesAddress, metaTxs: value ? [value] : [] }),
-    error: ({ error }) => makeError(error),
-  });
+  return makeOk({ rolesAddress, metaTxs: maybeTx ? [maybeTx] : [] });
 }
