@@ -18,7 +18,7 @@ import {
   size,
   toHex,
 } from 'viem';
-import { type MetaTransactionData, OperationType } from '../types';
+import { type MetaTransactionData, OperationType } from '@sdk/types';
 
 export const MULTI_SEND_ABI = parseAbi([
   'function multiSend(bytes memory transactions)',

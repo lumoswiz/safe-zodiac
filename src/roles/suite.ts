@@ -25,7 +25,7 @@ import type {
   IsModuleEnabledResult,
   ConditionFlat,
   ExecutionOptions,
-} from '../types';
+} from '@sdk/types';
 import {
   isContractDeployed,
   makeError,

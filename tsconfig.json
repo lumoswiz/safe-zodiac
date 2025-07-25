@@ -29,7 +29,11 @@
 
     "noImplicitOverride": true,
     "isolatedModules": true,
-    "noEmitOnError": true
+    "noEmitOnError": true,
+    "baseUrl": "src",
+    "paths": {
+      "@sdk/types": ["types"]
+    }
   },
 
   "include": ["src/**/*.ts", "src/**/*.tsx"],

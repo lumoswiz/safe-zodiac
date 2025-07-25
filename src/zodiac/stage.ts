@@ -6,7 +6,7 @@ import {
   RoleSubgraphStatus,
   SetupStage,
   SubgraphRole,
-} from '../types';
+} from '@sdk/types';
 import { DEFAULT_ROLES_NONCE } from './constants';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';

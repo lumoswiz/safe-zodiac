@@ -5,7 +5,7 @@ import {
   ExecutionMode,
   ExecFullSetupTxArgs,
   ExecStrategies,
-} from '../types';
+} from '@sdk/types';
 import { makeError, matchResult } from '../shared/utils';
 import { resolveSafeContext } from './context';
 import { orchestrateFullSetup } from './orchestrate';

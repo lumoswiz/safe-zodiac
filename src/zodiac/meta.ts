@@ -1,9 +1,8 @@
 import { Account, Hex } from 'viem';
 import { SafeSuite } from '../safe';
-import { MetaTransactionData, Result } from '../types';
+import { OperationType, MetaTransactionData, Result } from '@sdk/types';
 import { matchResult, makeError, makeOk } from '../shared/utils';
 import { signMultisendTx } from './signing';
-import { OperationType } from '../types';
 
 export async function buildMultisendExecMetaTx(
   safeSuite: SafeSuite,

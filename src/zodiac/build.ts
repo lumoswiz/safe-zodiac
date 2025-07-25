@@ -11,7 +11,7 @@ import {
   RolesSetupConfig,
   SetupStage,
   TxBuildOptions,
-} from '../types';
+} from '@sdk/types';
 import { expectBuiltTx, makeOk, matchResult } from '../shared/utils';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';

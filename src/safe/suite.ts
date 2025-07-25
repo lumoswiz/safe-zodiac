@@ -37,7 +37,7 @@ import {
   BuildSignSafeTx,
   MetaTransactionData,
   SAFE_VERSION_FALLBACK,
-} from '../types';
+} from '@sdk/types';
 import {
   isContractDeployed,
   makeError,

@@ -1,20 +1,10 @@
 import { Address, Hex } from 'viem';
 
-export interface ConditionFlat {
-  parent: number;
-  paramType: ParameterType;
-  operator: Operator;
-  compValue: Hex;
-}
-
-export enum ParameterType {
+export enum ExecutionOptions {
   None = 0,
-  Static = 1,
-  Dynamic = 2,
-  Tuple = 3,
-  Array = 4,
-  Calldata = 5,
-  AbiEncoded = 6,
+  Send = 1,
+  DelegateCall = 2,
+  Both = 3,
 }
 
 export enum Operator {
@@ -52,11 +42,21 @@ export enum Operator {
   _Placeholder31 = 31,
 }
 
-export enum ExecutionOptions {
+export enum ParameterType {
   None = 0,
-  Send = 1,
-  DelegateCall = 2,
-  Both = 3,
+  Static = 1,
+  Dynamic = 2,
+  Tuple = 3,
+  Array = 4,
+  Calldata = 5,
+  AbiEncoded = 6,
+}
+
+export interface ConditionFlat {
+  parent: number;
+  paramType: ParameterType;
+  operator: Operator;
+  compValue: Hex;
 }
 
 export interface RoleScope {
