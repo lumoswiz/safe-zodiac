@@ -2,8 +2,6 @@ import { Address } from 'viem';
 import {
   BuildInitialSetupArgs,
   BuildTxBucketsResult,
-  EnsureModuleEnabledResult,
-  EnsureRolesResult,
   ExecutionOptions,
   MetaTransactionData,
   PartialRolesSetupArgs,
@@ -14,16 +12,11 @@ import {
   SetupStage,
   TxBuildOptions,
 } from '../types';
-import {
-  expectBuiltTx,
-  makeError,
-  makeOk,
-  matchResult,
-  maybeBuiltTx,
-} from '../shared/utils';
+import { expectBuiltTx, makeOk, matchResult } from '../shared/utils';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';
 import { DEFAULT_ROLES_NONCE } from './constants';
+import { determineStartStage } from './stage';
 
 export async function buildAllTx(
   safeSuite: SafeSuite,
@@ -31,89 +24,45 @@ export async function buildAllTx(
   context: ResolvedSafeContext,
   owner: Address,
   config: RolesSetupConfig,
-  options: TxBuildOptions
+  options: TxBuildOptions,
+  chainId: number
 ): Promise<BuildTxBucketsResult> {
-  const { safeAddress, saltNonce, deployed } = context;
-  const rolesNonce = config.rolesNonce ?? DEFAULT_ROLES_NONCE;
+  const { safeAddress, saltNonce } = context;
 
-  if (!deployed) {
-    const allBuckets = await buildInitialSetupTxs({
-      safeSuite,
-      rolesSuite,
-      safeAddress,
-      owner,
-      safeNonce: saltNonce,
-      config,
-      options,
-      startAt: SetupStage.DeploySafe,
-    });
-
-    return makeOk(allBuckets);
-  }
-
-  const setupTxs: MetaTransactionData[] = [];
-  const multisendTxs: MetaTransactionData[] = [];
-
-  const rolesRes = await ensureRolesModule(rolesSuite, safeAddress, rolesNonce);
-  const { rolesAddress, metaTxs: rolesTxs } = await matchResult(rolesRes, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
-
-  setupTxs.push(...rolesTxs);
-
-  if (rolesTxs.length > 0) {
-    const extra = await buildInitialSetupTxs({
-      safeSuite,
-      rolesSuite,
-      safeAddress,
-      owner,
-      safeNonce: saltNonce ?? 0n,
-      config,
-      options,
-      startAt: SetupStage.EnableModule,
-    });
-
-    setupTxs.push(...extra.setupTxs);
-    multisendTxs.push(...extra.multisendTxs);
-    return makeOk({ setupTxs, multisendTxs });
-  }
-
-  const enableRes = await ensureModuleEnabled(
+  const stageRes = await determineStartStage({
     safeSuite,
-    safeAddress,
-    rolesAddress
-  );
-  const enableVal = await matchResult(enableRes, {
-    ok: ({ value }) => value,
+    rolesSuite,
+    context,
+    config,
+    chainId,
+  });
+
+  const startAt = await matchResult(stageRes, {
+    ok: ({ value }) => value as SetupStage,
     error: ({ error }) => Promise.reject(error),
   });
 
-  multisendTxs.push(...enableVal.metaTxs);
-
-  if (enableVal.metaTxs.length > 0) {
-    const extra = await buildInitialSetupTxs({
-      safeSuite,
-      rolesSuite,
-      safeAddress,
-      owner,
-      safeNonce: saltNonce ?? 0n,
-      config,
-      options,
-      startAt: SetupStage.AssignRoles,
-    });
-
-    multisendTxs.push(...extra.multisendTxs);
-    return makeOk({ setupTxs, multisendTxs });
+  if (startAt === SetupStage.NothingToDo) {
+    return makeOk({ setupTxs: [], multisendTxs: [] });
   }
 
-  return makeOk({ setupTxs, multisendTxs });
+  validateSetupArgs(startAt, config.rolesSetup);
+
+  const allBuckets = await buildInitialSetupTxs({
+    safeSuite,
+    rolesSuite,
+    safeAddress,
+    owner,
+    safeNonce: saltNonce ?? 0n,
+    config,
+    options,
+    startAt,
+  });
+
+  return makeOk(allBuckets);
 }
 
-export function validateSetupArgs(
-  startAt: SetupStage,
-  setup?: PartialRolesSetupArgs
-) {
+function validateSetupArgs(startAt: SetupStage, setup?: PartialRolesSetupArgs) {
   if (startAt <= SetupStage.ScopeFunctions && !setup) {
     throw new Error('Missing rolesSetup');
   }
@@ -132,15 +81,13 @@ export function validateSetupArgs(
   }
 }
 
-export async function buildInitialSetupTxs(
-  args: BuildInitialSetupArgs
-): Promise<{
+async function buildInitialSetupTxs(args: BuildInitialSetupArgs): Promise<{
   setupTxs: MetaTransactionData[];
   multisendTxs: MetaTransactionData[];
 }> {
   const rolesNonce = args.config.rolesNonce ?? DEFAULT_ROLES_NONCE;
   const rolesSetup = args.config.rolesSetup;
-  validateSetupArgs(args.startAt, rolesSetup);
+
   const setupTxs: MetaTransactionData[] = [];
   const multisendTxs: MetaTransactionData[] = [];
 
@@ -154,7 +101,7 @@ export async function buildInitialSetupTxs(
     error: ({ error }) => Promise.reject(error),
   });
 
-  const steps: Record<SetupStage, () => Promise<void>> = {
+  const steps: Partial<Record<SetupStage, () => Promise<void>>> = {
     [SetupStage.DeploySafe]: async () => {
       setupTxs.push(
         await buildSafeDeployTx(args.safeSuite, args.owner, args.safeNonce)
@@ -217,7 +164,8 @@ export async function buildInitialSetupTxs(
   };
 
   for (let stage = args.startAt; stage <= SetupStage.ScopeFunctions; stage++) {
-    await steps[stage]();
+    const step = steps[stage];
+    if (step) await step();
   }
 
   setupTxs.push(...(args.options.extraSetupTxs || []));
@@ -226,7 +174,7 @@ export async function buildInitialSetupTxs(
   return { setupTxs, multisendTxs };
 }
 
-export async function buildSafeDeployTx(
+async function buildSafeDeployTx(
   safeSuite: SafeSuite,
   owner: Address,
   nonce: bigint
@@ -237,7 +185,7 @@ export async function buildSafeDeployTx(
   );
 }
 
-export async function buildRolesDeployTx(
+async function buildRolesDeployTx(
   rolesSuite: RolesSuite,
   safeAddr: Address,
   nonce: bigint
@@ -248,7 +196,7 @@ export async function buildRolesDeployTx(
   );
 }
 
-export async function buildAssignRolesTx(
+async function buildAssignRolesTx(
   rolesSuite: RolesSuite,
   moduleAddr: Address,
   setup: RolesSetupArgs
@@ -266,7 +214,7 @@ export async function buildAssignRolesTx(
   });
 }
 
-export async function buildScopeTargetTx(
+async function buildScopeTargetTx(
   rolesSuite: RolesSuite,
   moduleAddr: Address,
   setup: RolesSetupArgs
@@ -283,7 +231,7 @@ export async function buildScopeTargetTx(
   });
 }
 
-export async function buildScopeFunctionTx(
+async function buildScopeFunctionTx(
   rolesSuite: RolesSuite,
   moduleAddr: Address,
   setup: RolesSetupArgs,
@@ -302,63 +250,4 @@ export async function buildScopeFunctionTx(
     ok: ({ value }) => value,
     error: ({ error }) => Promise.reject(error),
   });
-}
-
-export async function ensureModuleEnabled(
-  safeSuite: SafeSuite,
-  safe: Address,
-  module: Address
-): Promise<EnsureModuleEnabledResult> {
-  const enabledRes = await safeSuite.isModuleEnabled(safe, module);
-
-  const isEnabled = await matchResult(enabledRes, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
-
-  if (isEnabled) {
-    return makeOk({ metaTxs: [] });
-  }
-
-  const buildRes = await safeSuite.buildEnableModuleTx(safe, module);
-
-  const txResult = await matchResult(buildRes, {
-    ok: ({ value: { txData } }) => makeOk(txData),
-    error: ({ error }) => makeError(error),
-  });
-
-  return matchResult(txResult, {
-    ok: ({ value }) => makeOk({ metaTxs: [value as MetaTransactionData] }),
-    error: ({ error }) => makeError(error),
-  });
-}
-
-export async function ensureRolesModule(
-  rolesSuite: RolesSuite,
-  safe: Address,
-  rolesNonce: bigint = DEFAULT_ROLES_NONCE
-): Promise<EnsureRolesResult> {
-  const addrResult = rolesSuite.calculateModuleProxyAddress(safe, rolesNonce);
-
-  const rolesAddress = await matchResult(addrResult, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
-
-  const deployedResult = await rolesSuite.isModuleDeployed(safe, rolesNonce);
-
-  const isDeployed = await matchResult(deployedResult, {
-    ok: ({ value }) => value,
-    error: ({ error }) => Promise.reject(error),
-  });
-
-  if (isDeployed) {
-    return makeOk({ rolesAddress, metaTxs: [] });
-  }
-
-  const maybeTx = await maybeBuiltTx(
-    rolesSuite.buildDeployModuleTx(safe, rolesNonce)
-  );
-
-  return makeOk({ rolesAddress, metaTxs: maybeTx ? [maybeTx] : [] });
 }
