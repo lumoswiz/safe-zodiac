@@ -49,6 +49,23 @@ export class ZodiacSuite {
     });
   }
 
+  async getPredictedRolesAddress(
+    safe: Address,
+    saltNonce: bigint
+  ): Promise<Address> {
+    const result = this.rolesSuite.calculateModuleProxyAddress(safe, saltNonce);
+    return matchResult(result, {
+      ok: ({ value }) => value,
+      error: ({ error }) => {
+        throw new Error(
+          `Failed to calculate predicted Safe address: ${
+            typeof error === 'string' ? error : String(error)
+          }`
+        );
+      },
+    });
+  }
+
   async execFullSetupTx({
     safe,
     account,
