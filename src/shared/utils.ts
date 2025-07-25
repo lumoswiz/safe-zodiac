@@ -96,3 +96,29 @@ export function extractOptionalMetaTx(
     }
   });
 }
+
+export async function expectBuiltTx(
+  result: Promise<BuildTxResult>,
+  context: string
+): Promise<MetaTransactionData> {
+  const res = await result;
+  return matchResult(res, {
+    ok: ({ value }) => {
+      if (value.kind === 'skipped') {
+        throw new Error(`${context} unexpectedly skipped.`);
+      }
+      return value.tx;
+    },
+    error: ({ error }) => Promise.reject(error),
+  });
+}
+
+export async function maybeBuiltTx(
+  result: Promise<BuildTxResult>
+): Promise<MetaTransactionData | null> {
+  const res = await result;
+  return matchResult(res, {
+    ok: ({ value }) => (value.kind === 'built' ? value.tx : null),
+    error: ({ error }) => Promise.reject(error),
+  });
+}
