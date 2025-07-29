@@ -8,7 +8,7 @@ export enum Clearance {
   Function = 2,
 }
 
-export type ClearanceKey = keyof typeof Clearance;
+type ClearanceKey = keyof typeof Clearance;
 export type ExecKey = keyof typeof ExecutionOptions;
 
 export interface Annotation {
@@ -16,7 +16,7 @@ export interface Annotation {
   schema: string;
 }
 
-export interface Condition {
+interface SubgraphCondition {
   id: string;
   payload: unknown;
 }
@@ -25,7 +25,7 @@ export interface Func {
   selector: Hex;
   executionOptions: ExecutionOptions;
   wildcarded: boolean;
-  condition: Condition | null;
+  condition: SubgraphCondition | null;
 }
 
 export interface MemberAssignment {
@@ -47,18 +47,18 @@ export interface Target {
   functions: Func[];
 }
 
-export interface RawFunction {
+interface RawFunction {
   selector: Hex;
   executionOptions: ExecKey;
   wildcarded: boolean;
   condition: { id: string; json: string } | null;
 }
 
-export interface RawMember {
+interface RawMember {
   member: { address: Hex };
 }
 
-export interface RawTarget {
+interface RawTarget {
   address: Hex;
   clearance: ClearanceKey;
   executionOptions: ExecKey;
