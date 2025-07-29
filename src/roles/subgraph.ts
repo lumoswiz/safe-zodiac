@@ -1,11 +1,7 @@
 import { Address, Hex } from 'viem';
 import { CHAINS } from '../shared/constants';
-import {
-  Clearance,
-  ExecutionOptions,
-  RawSubgraphRole,
-  SubgraphRole,
-} from '@sdk/types';
+import { ExecutionOptions } from '@sdk/types';
+import { Clearance, RawSubgraphRole, SubgraphRole } from 'types/subgraph';
 
 const SUBGRAPH_URL =
   'https://gnosisguild.squids.live/roles:production/api/graphql';
