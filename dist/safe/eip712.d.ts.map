@@ -1,0 +1,1 @@
+{"version":3,"file":"eip712.d.ts","sourceRoot":"","sources":["../../src/safe/eip712.ts"],"names":[],"mappings":"AACA,OAAO,EAEL,GAAG,EAGJ,MAAM,MAAM,CAAC;AAEd,OAAO,EACL,aAAa,EACb,eAAe,EACf,cAAc,EAEf,MAAM,YAAY,CAAC;AAWpB,wBAAgB,gBAAgB,CAAC,WAAW,EAAE,MAAM,GAAG,aAAa,CAmBnE;AAED,wBAAgB,qBAAqB,CAAC,IAAI,EAAE,cAAc,GAAG,eAAe,CA0C3E;AAED,wBAAgB,uBAAuB,CAAC,IAAI,EAAE,cAAc,GAAG,GAAG,CAEjE"}

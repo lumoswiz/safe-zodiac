@@ -3,8 +3,13 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "module": "index.ts",
-  "private": true,
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "devDependencies": {
     "@types/bun": "^1.2.18"
   },
