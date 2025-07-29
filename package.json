@@ -4,6 +4,12 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "private": true,
   "devDependencies": {
     "@types/bun": "^1.2.18"
