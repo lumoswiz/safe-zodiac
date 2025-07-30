@@ -1,5 +1,6 @@
 import { CHAINS } from '../shared/constants';
-import { Clearance, ExecutionOptions, } from '@sdk/types';
+import { ExecutionOptions } from '@sdk/types';
+import { Clearance } from 'types/subgraph';
 const SUBGRAPH_URL = 'https://gnosisguild.squids.live/roles:production/api/graphql';
 const ROLE_QUERY = `
   query Role($id: ID!) {

@@ -5,11 +5,11 @@ import {
   DetermineStartStageArgs,
   RoleSubgraphStatus,
   SetupStage,
-  SubgraphRole,
 } from '@sdk/types';
 import { DEFAULT_ROLES_NONCE } from './constants';
 import { SafeSuite } from '../safe';
 import { RolesSuite } from '../roles/suite';
+import { SubgraphRole } from 'types/subgraph';
 
 export async function determineStartStage({
   safeSuite,
