@@ -5,11 +5,11 @@
       "name": "safe-zodiac",
       "dependencies": {
         "@types/semver": "^7.7.0",
-        "prool": "^0.0.24",
         "semver": "^7.7.2",
       },
       "devDependencies": {
         "@types/bun": "^1.2.18",
+        "prool": "^0.0.24",
       },
       "peerDependencies": {
         "typescript": "^5",
