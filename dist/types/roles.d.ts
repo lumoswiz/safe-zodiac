@@ -54,6 +54,12 @@ export interface ConditionFlat {
     operator: Operator;
     compValue: Hex;
 }
+export interface Condition {
+    paramType: ParameterType;
+    operator: Operator;
+    compValue?: `0x${string}`;
+    children?: readonly Condition[];
+}
 export interface RoleScope {
     selectors: Hex;
     conditions: ConditionFlat[];

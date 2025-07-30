@@ -5,13 +5,13 @@ export declare enum Clearance {
     Target = 1,
     Function = 2
 }
-export type ClearanceKey = keyof typeof Clearance;
+type ClearanceKey = keyof typeof Clearance;
 export type ExecKey = keyof typeof ExecutionOptions;
 export interface Annotation {
     uri: string;
     schema: string;
 }
-export interface Condition {
+interface SubgraphCondition {
     id: string;
     payload: unknown;
 }
@@ -19,7 +19,7 @@ export interface Func {
     selector: Hex;
     executionOptions: ExecutionOptions;
     wildcarded: boolean;
-    condition: Condition | null;
+    condition: SubgraphCondition | null;
 }
 export interface MemberAssignment {
     address: Hex;
@@ -37,7 +37,7 @@ export interface Target {
     executionOptions: ExecutionOptions;
     functions: Func[];
 }
-export interface RawFunction {
+interface RawFunction {
     selector: Hex;
     executionOptions: ExecKey;
     wildcarded: boolean;
@@ -46,12 +46,12 @@ export interface RawFunction {
         json: string;
     } | null;
 }
-export interface RawMember {
+interface RawMember {
     member: {
         address: Hex;
     };
 }
-export interface RawTarget {
+interface RawTarget {
     address: Hex;
     clearance: ClearanceKey;
     executionOptions: ExecKey;
@@ -64,4 +64,5 @@ export interface RawSubgraphRole {
     annotations: Annotation[];
     lastUpdate: number;
 }
+export {};
 //# sourceMappingURL=subgraph.d.ts.map
